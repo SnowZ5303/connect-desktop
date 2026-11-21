@@ -1,0 +1,10 @@
+{
+  "formato": 1,
+  "ativo": "squad-de-desenvolvimento-minha-versao",
+  "arquivos": [
+    ".claude/agents/gerador.md",
+    ".claude/agents/artista-canva.md",
+    ".claude/agents/modelador3d.md",
+    ".claude/agents/revisor.md"
+  ]
+}

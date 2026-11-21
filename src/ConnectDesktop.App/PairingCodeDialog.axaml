@@ -1,0 +1,24 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="ConnectDesktop.App.PairingCodeDialog"
+        Title="Pareamento"
+        Width="380" Height="250"
+        CanResize="False"
+        WindowStartupLocation="CenterOwner">
+  <StackPanel Margin="20" Spacing="12">
+    <TextBlock Text="Digite o código de pareamento" FontWeight="SemiBold" FontSize="16" />
+    <TextBlock Text="Veja o código de 6 dígitos na tela do PC secundário."
+               TextWrapping="Wrap" Opacity="0.8" />
+    <TextBox x:Name="CodeBox"
+             FontSize="24"
+             FontFamily="Consolas"
+             Watermark="123 456"
+             TextAlignment="Center"
+             TextChanged="OnCodeChanged" />
+    <TextBlock x:Name="ErrorText" IsVisible="False" Foreground="#C62828" TextWrapping="Wrap" />
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+      <Button Content="Cancelar" Click="OnCancelClick" />
+      <Button x:Name="ConnectButton" Content="Conectar" Classes="accent" IsDefault="True" Click="OnConnectClick" />
+    </StackPanel>
+  </StackPanel>
+</Window>

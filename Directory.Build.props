@@ -1,0 +1,17 @@
+<Project>
+  <PropertyGroup>
+    <!-- O CI sobrescreve com -p:Version=1.0.<run_number> -->
+    <Version Condition="'$(Version)' == ''">1.0.0</Version>
+    <!-- owner/repo no GitHub, usado pelo atualizador. O CI sobrescreve com ${{ github.repository }} -->
+    <GitHubRepo Condition="'$(GitHubRepo)' == ''">SnowZ5303/connect-desktop</GitHubRepo>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <Company>Connect Desktop</Company>
+    <Product>Connect Desktop</Product>
+  </PropertyGroup>
+  <ItemGroup>
+    <AssemblyMetadata Include="GitHubRepo" Value="$(GitHubRepo)" />
+  </ItemGroup>
+</Project>

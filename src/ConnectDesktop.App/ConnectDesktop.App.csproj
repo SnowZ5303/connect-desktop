@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>ConnectDesktop</AssemblyName>
+    <RootNamespace>ConnectDesktop.App</RootNamespace>
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.2.3" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.2.3" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.3" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.2.3" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\ConnectDesktop.Core\ConnectDesktop.Core.csproj" />
+    <ProjectReference Include="..\ConnectDesktop.Platform.Windows\ConnectDesktop.Platform.Windows.csproj" />
+    <ProjectReference Include="..\ConnectDesktop.Platform.Mac\ConnectDesktop.Platform.Mac.csproj" />
+    <ProjectReference Include="..\ConnectDesktop.Platform.Linux\ConnectDesktop.Platform.Linux.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,123 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="ConnectDesktop.App.MainWindow"
+        Title="Connect Desktop"
+        Width="520" Height="620"
+        MinWidth="520" MinHeight="620"
+        WindowStartupLocation="CenterScreen"
+        Closing="OnWindowClosing">
+  <Window.Styles>
+    <Style Selector="Button.side.selected">
+      <Setter Property="Background" Value="#2563EB" />
+      <Setter Property="Foreground" Value="White" />
+    </Style>
+  </Window.Styles>
+
+  <DockPanel Margin="20">
+
+    <!-- Rodapé -->
+    <StackPanel DockPanel.Dock="Bottom" Spacing="8">
+      <CheckBox x:Name="ClipboardCheck" Content="Compartilhar área de transferência"
+                Checked="OnOptionToggled" Unchecked="OnOptionToggled" />
+      <CheckBox x:Name="UpdatesCheck" Content="Procurar atualizações ao abrir"
+                Checked="OnOptionToggled" Unchecked="OnOptionToggled" />
+      <StackPanel Orientation="Horizontal" Spacing="8">
+        <Button x:Name="CheckUpdatesButton" Content="Verificar atualizações" Click="OnCheckUpdatesClick" />
+        <Button x:Name="PairsToggleButton" Content="Pares salvos" Click="OnPairsToggleClick" />
+      </StackPanel>
+      <TextBlock x:Name="UpdateInfoText" TextWrapping="Wrap" Opacity="0.8" />
+      <StackPanel x:Name="PairsPanel" IsVisible="False" Spacing="6">
+        <ListBox x:Name="PairsList" Height="110" />
+        <TextBlock x:Name="PairsEmptyText" Text="Nenhum PC pareado." Opacity="0.7" />
+        <Button Content="Esquecer pareamento selecionado" Click="OnForgetPairClick" />
+      </StackPanel>
+    </StackPanel>
+
+    <!-- Conteúdo -->
+    <ScrollViewer>
+      <StackPanel Spacing="14" Margin="0,0,8,0">
+
+        <StackPanel Spacing="2">
+          <TextBlock Text="Connect Desktop" FontSize="24" FontWeight="SemiBold" />
+          <TextBlock x:Name="VersionText" Opacity="0.7" />
+        </StackPanel>
+
+        <Border x:Name="UpdateBanner" IsVisible="False" Padding="12" CornerRadius="6" Background="#E8F1FF">
+          <StackPanel Spacing="8">
+            <TextBlock x:Name="UpdateText" FontWeight="SemiBold" Foreground="#1F1F1F" TextWrapping="Wrap" />
+            <Button x:Name="UpdateButton" Content="Atualizar agora" Click="OnUpdateClick" HorizontalAlignment="Left" />
+            <ProgressBar x:Name="UpdateProgress" IsVisible="False" Minimum="0" Maximum="1" Height="6" />
+          </StackPanel>
+        </Border>
+
+        <Border x:Name="WarningBorder" IsVisible="False" Padding="12" CornerRadius="6" Background="#FDECEA">
+          <TextBlock x:Name="WarningText" TextWrapping="Wrap" Foreground="#1F1F1F" />
+        </Border>
+
+        <StackPanel Spacing="6">
+          <TextBlock Text="Nome deste PC" FontWeight="SemiBold" />
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBox x:Name="NameBox" Grid.Column="0" MaxLength="40" Margin="0,0,8,0" />
+            <Button x:Name="SaveNameButton" Grid.Column="1" Content="Salvar" Click="OnSaveNameClick" />
+          </Grid>
+        </StackPanel>
+
+        <StackPanel Spacing="6">
+          <TextBlock Text="Papel deste PC" FontWeight="SemiBold" />
+          <RadioButton x:Name="PrimaryRadio" GroupName="Papel"
+                       Content="Este é o PC principal (compartilha mouse e teclado)"
+                       Checked="OnRoleChecked" />
+          <RadioButton x:Name="SecondaryRadio" GroupName="Papel"
+                       Content="Este é o PC secundário (recebe mouse e teclado)"
+                       Checked="OnRoleChecked" />
+        </StackPanel>
+
+        <Border Padding="10" CornerRadius="6" BorderBrush="#9CA3AF" BorderThickness="1">
+          <TextBlock x:Name="StatusText" TextWrapping="Wrap" />
+        </Border>
+
+        <!-- Painel do PC principal -->
+        <StackPanel x:Name="PrimaryPanel" Spacing="12">
+          <TextBlock Text="PCs secundários na rede" FontWeight="SemiBold" />
+          <ListBox x:Name="PeersList" Height="130" />
+          <TextBlock x:Name="EmptyPeersText" TextWrapping="Wrap" Opacity="0.7"
+                     Text="Procurando PCs na rede… Abra o Connect Desktop no outro PC e escolha 'secundário'." />
+          <Button x:Name="ConnectButton" Content="Conectar" Click="OnConnectClick" HorizontalAlignment="Left" />
+
+          <TextBlock Text="Posição do PC secundário" FontWeight="SemiBold" Margin="0,8,0,0" />
+          <Grid ColumnDefinitions="*,*,*" RowDefinitions="*,*,*" Height="190">
+            <Button x:Name="TopButton" Grid.Row="0" Grid.Column="1" Classes="side" Tag="Top"
+                    Content="Acima" Margin="4" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                    Click="OnSideClick" />
+            <Button x:Name="LeftButton" Grid.Row="1" Grid.Column="0" Classes="side" Tag="Left"
+                    Content="Esquerda" Margin="4" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                    Click="OnSideClick" />
+            <Border Grid.Row="1" Grid.Column="1" Margin="4" CornerRadius="6"
+                    BorderBrush="#9CA3AF" BorderThickness="2">
+              <TextBlock Text="Este PC" FontWeight="SemiBold"
+                         HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+            <Button x:Name="RightButton" Grid.Row="1" Grid.Column="2" Classes="side" Tag="Right"
+                    Content="Direita" Margin="4" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                    Click="OnSideClick" />
+            <Button x:Name="BottomButton" Grid.Row="2" Grid.Column="1" Classes="side" Tag="Bottom"
+                    Content="Abaixo" Margin="4" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
+                    Click="OnSideClick" />
+          </Grid>
+          <TextBlock Text="Para voltar o mouse a qualquer momento: Ctrl + Alt + Esc"
+                     TextWrapping="Wrap" Opacity="0.7" />
+        </StackPanel>
+
+        <!-- Painel do PC secundário -->
+        <StackPanel x:Name="SecondaryPanel" Spacing="8" IsVisible="False">
+          <TextBlock Text="Código de pareamento" FontWeight="SemiBold" />
+          <TextBlock x:Name="CodeText" Text="--- ---" FontSize="40" FontWeight="Bold"
+                     FontFamily="Consolas" HorizontalAlignment="Center" Margin="0,8,0,8" />
+          <TextBlock Text="Digite este código no PC principal para conectar."
+                     TextWrapping="Wrap" HorizontalAlignment="Center" Opacity="0.8" />
+        </StackPanel>
+
+      </StackPanel>
+    </ScrollViewer>
+  </DockPanel>
+</Window>

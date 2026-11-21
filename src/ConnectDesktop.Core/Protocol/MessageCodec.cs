@@ -1,0 +1,179 @@
+// Dono: g01. Assinaturas públicas FIXAS (não mudar nomes/parâmetros).
+using System.Buffers.Binary;
+using System.Text;
+using ConnectDesktop.Core.Layout;
+using ConnectDesktop.Core.Platform;
+
+namespace ConnectDesktop.Core.Protocol;
+
+/// <summary>
+/// Serializa mensagens em bytes (sem cabeçalho de tamanho; o enquadramento é do canal).
+/// Formato: [1 byte MessageType][payload little-endian].
+/// MouseMove: int32 DX, int32 DY | MouseButton: byte Button, byte Down(0/1) | MouseWheel: int32 DX, int32 DY
+/// Key: uint16 Hid, byte Down | Enter: byte PrimarySide, double Position | Leave: double Position | ReleaseAll: vazio
+/// Clipboard: bytes UTF-8 (resto do buffer) | ScreenInfo: int32 W, int32 H | Ping/Pong: int64 Timestamp
+/// </summary>
+public static class MessageCodec
+{
+    /// <summary>Tamanho máximo de uma mensagem serializada (texto de clipboard incluso).</summary>
+    public const int MaxMessageSize = 1024 * 1024;
+
+    private const int MaxMouseButtonValue = (int)MouseButton.X2;
+    private const int MaxScreenSideValue = (int)ScreenSide.Bottom;
+
+    /// <summary>Lança <see cref="ArgumentException"/> se a mensagem não couber em <see cref="MaxMessageSize"/>.</summary>
+    public static byte[] Encode(Message message)
+    {
+        byte[] payload;
+        switch (message)
+        {
+            case MouseMoveMessage m:
+                payload = new byte[8];
+                BinaryPrimitives.WriteInt32LittleEndian(payload.AsSpan(0), m.DX);
+                BinaryPrimitives.WriteInt32LittleEndian(payload.AsSpan(4), m.DY);
+                break;
+            case MouseButtonMessage m:
+                payload = new byte[] { (byte)m.Button, m.Down ? (byte)1 : (byte)0 };
+                break;
+            case MouseWheelMessage m:
+                payload = new byte[8];
+                BinaryPrimitives.WriteInt32LittleEndian(payload.AsSpan(0), m.DX);
+                BinaryPrimitives.WriteInt32LittleEndian(payload.AsSpan(4), m.DY);
+                break;
+            case KeyMessage m:
+                payload = new byte[3];
+                BinaryPrimitives.WriteUInt16LittleEndian(payload.AsSpan(0), m.Hid);
+                payload[2] = m.Down ? (byte)1 : (byte)0;
+                break;
+            case EnterMessage m:
+                payload = new byte[9];
+                payload[0] = (byte)(int)m.PrimarySide;
+                BinaryPrimitives.WriteDoubleLittleEndian(payload.AsSpan(1), m.Position);
+                break;
+            case LeaveMessage m:
+                payload = new byte[8];
+                BinaryPrimitives.WriteDoubleLittleEndian(payload.AsSpan(0), m.Position);
+                break;
+            case ReleaseAllMessage:
+                payload = Array.Empty<byte>();
+                break;
+            case ClipboardMessage m:
+                payload = Encoding.UTF8.GetBytes(m.Text);
+                break;
+            case ScreenInfoMessage m:
+                payload = new byte[8];
+                BinaryPrimitives.WriteInt32LittleEndian(payload.AsSpan(0), m.Width);
+                BinaryPrimitives.WriteInt32LittleEndian(payload.AsSpan(4), m.Height);
+                break;
+            case PingMessage m:
+                payload = new byte[8];
+                BinaryPrimitives.WriteInt64LittleEndian(payload.AsSpan(0), m.Timestamp);
+                break;
+            case PongMessage m:
+                payload = new byte[8];
+                BinaryPrimitives.WriteInt64LittleEndian(payload.AsSpan(0), m.Timestamp);
+                break;
+            default:
+                throw new ArgumentException("Tipo de mensagem desconhecido.", nameof(message));
+        }
+
+        if (1 + payload.Length > MaxMessageSize)
+            throw new ArgumentException("Mensagem grande demais para enviar.", nameof(message));
+
+        var result = new byte[1 + payload.Length];
+        result[0] = (byte)message.Type;
+        payload.CopyTo(result, 1);
+        return result;
+    }
+
+    /// <summary>Lança <see cref="FormatException"/> se os bytes forem inválidos ou o tipo desconhecido.</summary>
+    public static Message Decode(ReadOnlySpan<byte> data)
+    {
+        if (data.Length < 1 || data.Length > MaxMessageSize)
+            throw new FormatException("Mensagem vazia ou com tamanho inválido.");
+
+        var type = data[0];
+        var p = data.Slice(1);
+
+        switch ((MessageType)type)
+        {
+            case MessageType.MouseMove:
+                Expect(p, 8, MessageType.MouseMove);
+                return new MouseMoveMessage(BinaryPrimitives.ReadInt32LittleEndian(p.Slice(0, 4)),
+                                            BinaryPrimitives.ReadInt32LittleEndian(p.Slice(4, 4)));
+            case MessageType.MouseButton:
+                Expect(p, 2, MessageType.MouseButton);
+                return new MouseButtonMessage((MouseButton)ReadMouseButton(p[0]), ReadBool(p[1]));
+            case MessageType.MouseWheel:
+                Expect(p, 8, MessageType.MouseWheel);
+                return new MouseWheelMessage(BinaryPrimitives.ReadInt32LittleEndian(p.Slice(0, 4)),
+                                             BinaryPrimitives.ReadInt32LittleEndian(p.Slice(4, 4)));
+            case MessageType.Key:
+                Expect(p, 3, MessageType.Key);
+                return new KeyMessage(BinaryPrimitives.ReadUInt16LittleEndian(p.Slice(0, 2)), ReadBool(p[2]));
+            case MessageType.Enter:
+                Expect(p, 9, MessageType.Enter);
+                return new EnterMessage((ScreenSide)ReadScreenSide(p[0]),
+                                        BinaryPrimitives.ReadDoubleLittleEndian(p.Slice(1, 8)));
+            case MessageType.Leave:
+                Expect(p, 8, MessageType.Leave);
+                return new LeaveMessage(BinaryPrimitives.ReadDoubleLittleEndian(p.Slice(0, 8)));
+            case MessageType.ReleaseAll:
+                Expect(p, 0, MessageType.ReleaseAll);
+                return new ReleaseAllMessage();
+            case MessageType.Clipboard:
+                return new ClipboardMessage(DecodeText(p));
+            case MessageType.ScreenInfo:
+                Expect(p, 8, MessageType.ScreenInfo);
+                return new ScreenInfoMessage(BinaryPrimitives.ReadInt32LittleEndian(p.Slice(0, 4)),
+                                             BinaryPrimitives.ReadInt32LittleEndian(p.Slice(4, 4)));
+            case MessageType.Ping:
+                Expect(p, 8, MessageType.Ping);
+                return new PingMessage(BinaryPrimitives.ReadInt64LittleEndian(p.Slice(0, 8)));
+            case MessageType.Pong:
+                Expect(p, 8, MessageType.Pong);
+                return new PongMessage(BinaryPrimitives.ReadInt64LittleEndian(p.Slice(0, 8)));
+            default:
+                throw new FormatException($"Tipo de mensagem desconhecido: {type}.");
+        }
+    }
+
+    private static void Expect(ReadOnlySpan<byte> payload, int length, MessageType type)
+    {
+        if (payload.Length != length)
+            throw new FormatException($"Tamanho de payload inválido para {type}: esperado {length}, recebido {payload.Length}.");
+    }
+
+    private static bool ReadBool(byte value)
+    {
+        if (value > 1)
+            throw new FormatException($"Valor booleano inválido: {value}.");
+        return value == 1;
+    }
+
+    private static byte ReadMouseButton(byte value)
+    {
+        if (value < 1 || value > MaxMouseButtonValue)
+            throw new FormatException($"Botão do mouse inválido: {value}.");
+        return value;
+    }
+
+    private static byte ReadScreenSide(byte value)
+    {
+        if (value > MaxScreenSideValue)
+            throw new FormatException($"Lado de tela inválido: {value}.");
+        return value;
+    }
+
+    private static string DecodeText(ReadOnlySpan<byte> payload)
+    {
+        try
+        {
+            return new UTF8Encoding(false, true).GetString(payload);
+        }
+        catch (DecoderFallbackException ex)
+        {
+            throw new FormatException("Texto UTF-8 inválido.", ex);
+        }
+    }
+}
