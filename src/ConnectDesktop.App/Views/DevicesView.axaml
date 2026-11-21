@@ -44,6 +44,26 @@
         </StackPanel>
       </Border>
 
+      <!-- Conectar por IP -->
+      <Border Classes="card">
+        <StackPanel Spacing="12">
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <Path Classes="icon accent" Data="{StaticResource IconLink}" VerticalAlignment="Center" />
+            <TextBlock Text="{s:Tr devices.manualTitle}" Classes="title" VerticalAlignment="Center" />
+          </StackPanel>
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBox x:Name="AddressBox" Grid.Column="0" Classes="field" Margin="0,0,12,0"
+                     Watermark="{s:Tr devices.manualWatermark}" />
+            <Button x:Name="ConnectManualButton" Grid.Column="1" Classes="primary" MinWidth="140"
+                    Content="{s:Tr devices.manualConnect}" />
+          </Grid>
+          <ProgressBar x:Name="ManualProgress" IsIndeterminate="True" Height="4" IsVisible="False" />
+          <TextBlock Text="{s:Tr devices.manualHint}" TextWrapping="Wrap" Classes="muted" />
+          <TextBlock x:Name="ManualNoticeText" Text="{s:Tr devices.manualNotPrimary}" TextWrapping="Wrap"
+                     Classes="muted" IsVisible="False" />
+        </StackPanel>
+      </Border>
+
       <!-- Estado vazio -->
       <Border x:Name="EmptyPanel" Classes="card" IsVisible="False">
         <StackPanel Spacing="10" HorizontalAlignment="Center" Margin="0,16">

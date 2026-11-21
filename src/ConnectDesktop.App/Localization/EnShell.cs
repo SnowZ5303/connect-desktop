@@ -89,6 +89,11 @@ internal static class EnShell
         ["conn.update_banner"] = "New version v{0} available",
         ["conn.update_now"] = "Update now",
         ["conn.update_failed"] = "Could not update: {0}",
+        ["conn.or"] = "or",
+        ["conn.connect_by_ip"] = "connect by IP",
+        ["conn.ip_placeholder"] = "e.g. 192.168.0.10 or 192.168.0.10:47801",
+        ["conn.connect"] = "Connect",
+        ["conn.this_ip"] = "IP of this PC: {0}",
 
         // Diálogo de código de pareamento
         ["dialog.pair_title"] = "Pairing",
@@ -118,6 +123,8 @@ internal static class EnShell
         ["err.cancelled"] = "Pairing cancelled.",
         ["err.unknown_pairing"] = "The other PC does not recognize this pairing. Forget it in 'Saved pairs' and connect again to pair with a code.",
         ["err.refused"] = "Pairing refused by the other PC.",
+        ["err.invalid_address"] = "Invalid address. Use an IP such as 192.168.0.10 or 192.168.0.10:47801.",
+        ["err.not_primary"] = "You can only connect to another PC from the main role. Choose 'This is the main PC' on the Connection screen.",
         ["update.none"] = "No updates available.",
     };
 }

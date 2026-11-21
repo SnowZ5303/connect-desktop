@@ -1,6 +1,7 @@
 // Dono: g13.
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Path = Avalonia.Controls.Shapes.Path;
 using Avalonia.Media;
 using Avalonia.Layout;
@@ -11,15 +12,28 @@ namespace ConnectDesktop.App.Views;
 
 public partial class DevicesView : UserControl
 {
+    private bool _connectingManual;
 
     /// <summary>Geometria de ícone do dicionário do app (inclui os ResourceInclude mesclados).</summary>
     private static Avalonia.Media.Geometry? IconGeometry(string key)
         => Application.Current is { } app && app.TryGetResource(key, null, out var resource)
             ? resource as Avalonia.Media.Geometry
             : null;
+
     public DevicesView()
     {
         InitializeComponent();
+
+        ConnectManualButton.Click += async (_, _) => await ConnectManualAsync();
+        AddressBox.KeyDown += async (_, e) =>
+        {
+            if (e.Key == Key.Enter)
+            {
+                e.Handled = true;
+                await ConnectManualAsync();
+            }
+        };
+
         AttachedToVisualTree += (_, _) => Subscribe();
         DetachedFromVisualTree += (_, _) => Unsubscribe();
     }
@@ -49,7 +63,7 @@ public partial class DevicesView : UserControl
 
     private void OnPeersChanged(IReadOnlyList<PeerInfo> _) => Rebuild();
 
-    /// <summary>Reconstrói a lista de PCs e o cabeçalho "Este PC" com os dados atuais.</summary>
+    /// <summary>Reconstrói a lista de PCs, o cabeçalho "Este PC" e o estado do cartão "Conectar por IP".</summary>
     private void Rebuild()
     {
         var controller = App.Controller;
@@ -60,19 +74,59 @@ public partial class DevicesView : UserControl
             ThisPcText.Text = "";
             EmptyPanel.IsVisible = true;
             OnlyPrimaryHint.IsVisible = false;
+            ApplyManualState(false);
             return;
         }
 
         var isPrimary = controller.Settings.Role == DeviceRole.Primary;
+        var ip = controller.LocalIPv4Addresses.FirstOrDefault();
         ThisPcText.Text = Loc.Instance.Format("devices.thisPcInfo",
-            controller.Settings.DeviceName, RoleText(controller.Settings.Role));
+                              controller.Settings.DeviceName, RoleText(controller.Settings.Role))
+                          + "   ·   "
+                          + (ip is null ? Loc.Instance["devices.noIp"] : Loc.Instance.Format("devices.ip", ip));
 
         var peers = controller.AllPeers;
         EmptyPanel.IsVisible = peers.Count == 0;
         OnlyPrimaryHint.IsVisible = !isPrimary;
+        ApplyManualState(isPrimary);
 
         foreach (var peer in peers)
             PeersList.Children.Add(BuildRow(controller, peer, isPrimary));
+    }
+
+    /// <summary>Habilita o cartão "Conectar por IP" só no papel principal e fora de uma conexão em andamento.</summary>
+    private void ApplyManualState(bool isPrimary)
+    {
+        var enabled = isPrimary && !_connectingManual;
+        AddressBox.IsEnabled = enabled;
+        ConnectManualButton.IsEnabled = enabled;
+        ManualNoticeText.IsVisible = !isPrimary;
+    }
+
+    private async Task ConnectManualAsync()
+    {
+        var controller = App.Controller;
+        var address = AddressBox.Text?.Trim() ?? "";
+        if (controller is null || _connectingManual || address.Length == 0 || controller.Settings.Role != DeviceRole.Primary)
+            return;
+
+        _connectingManual = true;
+        ManualProgress.IsVisible = true;
+        ApplyManualState(true);
+        try
+        {
+            await controller.ConnectToAddressAsync(address);
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Falha ao conectar por IP.", ex);
+        }
+        finally
+        {
+            _connectingManual = false;
+            ManualProgress.IsVisible = false;
+            Rebuild();
+        }
     }
 
     private Border BuildRow(AppController controller, PeerInfo peer, bool isPrimary)

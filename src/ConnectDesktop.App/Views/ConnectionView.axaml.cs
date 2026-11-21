@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using ConnectDesktop.App.Services;
 using ConnectDesktop.Core.Layout;
@@ -94,6 +95,10 @@ public partial class ConnectionView : UserControl
         StatusDot.IsVisible = connected;
         StatusText.Text = _status;
 
+        var addresses = _controller.LocalIPv4Addresses;
+        LocalIpText.Text = Loc.Instance.Format("conn.this_ip", string.Join(" · ", addresses));
+        LocalIpText.IsVisible = addresses.Count > 0 && !primary;
+
         RefreshPosition(connected);
         RenderWarning();
         RenderUpdate();
@@ -105,7 +110,8 @@ public partial class ConnectionView : UserControl
             ? Loc.Instance.Format("conn.summary_connected", _controller.ConnectedPeerName ?? string.Empty)
             : Loc.Instance["conn.summary_none"];
         DisconnectButton.IsVisible = connected;
-        ChooseDeviceLink.IsVisible = !connected;
+        ChooseRow.IsVisible = !connected;
+        IpPanel.IsVisible = IpPanel.IsVisible && !connected;
 
         var selected = _controller.Settings.SecondarySide;
         ApplySide(LeftSide, "conn.side_left", ScreenSide.Left, selected);
@@ -189,6 +195,55 @@ public partial class ConnectionView : UserControl
 
     private void OnDisconnectClick(object? sender, RoutedEventArgs e)
         => _ = _controller.DisconnectAsync();
+
+    private void OnConnectByIpLinkClick(object? sender, RoutedEventArgs e)
+    {
+        IpPanel.IsVisible = !IpPanel.IsVisible;
+        if (IpPanel.IsVisible)
+            IpBox.Focus();
+    }
+
+    private async void OnConnectByIpClick(object? sender, RoutedEventArgs e)
+    {
+        var address = (IpBox.Text ?? string.Empty).Trim();
+        if (_connectingIp || address.Length == 0)
+            return;
+
+        _connectingIp = true;
+        SetIpBusy(true);
+        try
+        {
+            await _controller.ConnectToAddressAsync(address);
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Falha ao conectar por IP.", ex);
+        }
+        finally
+        {
+            _connectingIp = false;
+            SetIpBusy(false);
+        }
+    }
+
+    /// <summary>Bloqueia o campo e o botão enquanto a conexão por IP está em andamento.</summary>
+    private void SetIpBusy(bool busy)
+    {
+        IpBox.IsEnabled = !busy;
+        ConnectIpButton.IsEnabled = !busy;
+        IpProgress.IsVisible = busy;
+    }
+
+    private bool _connectingIp;
+
+    private void OnIpKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter)
+        {
+            e.Handled = true;
+            OnConnectByIpClick(sender, e);
+        }
+    }
 
     private void OnChooseDeviceClick(object? sender, RoutedEventArgs e)
         => NavigateRequested?.Invoke("devices");

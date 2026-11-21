@@ -11,7 +11,7 @@ internal static class EnPages
         ["devices.thisPc"] = "This PC",
         ["devices.thisPcInfo"] = "{0} · {1}",
         ["devices.emptyTitle"] = "Searching for PCs on the network…",
-        ["devices.emptyHint"] = "Open Connect Desktop on the other PC, on the same network. PCs appear here automatically.",
+        ["devices.emptyHint"] = "Open Connect Desktop on the other PC, on the same network. PCs appear here automatically. If they don't appear, use Connect by IP below.",
         ["devices.onlyPrimaryHint"] = "To connect to a PC, this PC must be the main one.",
         ["devices.role.primary"] = "Main",
         ["devices.role.secondary"] = "Secondary",
@@ -21,6 +21,12 @@ internal static class EnPages
         ["devices.disconnect"] = "Disconnect",
         ["devices.ip"] = "IP: {0}",
         ["devices.version"] = "Version {0}",
+        ["devices.noIp"] = "IP unavailable",
+        ["devices.manualTitle"] = "Connect by IP",
+        ["devices.manualWatermark"] = "e.g. 192.168.0.104",
+        ["devices.manualConnect"] = "Connect",
+        ["devices.manualHint"] = "See the IP on the Connection screen of the other PC (secondary role).",
+        ["devices.manualNotPrimary"] = "To connect by IP, this PC must be the main one. Change the role on the Connection screen.",
 
         // Transferências
         ["transfers.title"] = "Transfers",

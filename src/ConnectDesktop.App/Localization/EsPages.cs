@@ -11,7 +11,7 @@ internal static class EsPages
         ["devices.thisPc"] = "Este PC",
         ["devices.thisPcInfo"] = "{0} · {1}",
         ["devices.emptyTitle"] = "Buscando PCs en la red…",
-        ["devices.emptyHint"] = "Abra Connect Desktop en el otro PC, en la misma red. Los PCs aparecen aquí solos.",
+        ["devices.emptyHint"] = "Abra Connect Desktop en el otro PC, en la misma red. Los PCs aparecen aquí solos. Si no aparecen, use Conectar por IP abajo.",
         ["devices.onlyPrimaryHint"] = "Para conectarse a un PC, este PC debe ser el principal.",
         ["devices.role.primary"] = "Principal",
         ["devices.role.secondary"] = "Secundario",
@@ -21,6 +21,12 @@ internal static class EsPages
         ["devices.disconnect"] = "Desconectar",
         ["devices.ip"] = "IP: {0}",
         ["devices.version"] = "Versión {0}",
+        ["devices.noIp"] = "IP no disponible",
+        ["devices.manualTitle"] = "Conectar por IP",
+        ["devices.manualWatermark"] = "Ej.: 192.168.0.104",
+        ["devices.manualConnect"] = "Conectar",
+        ["devices.manualHint"] = "Vea la IP en la pantalla Conexión del otro PC (rol secundario).",
+        ["devices.manualNotPrimary"] = "Para conectar por IP, este PC debe ser el principal. Cambie el rol en la pantalla Conexión.",
 
         // Transferencias
         ["transfers.title"] = "Transferencias",

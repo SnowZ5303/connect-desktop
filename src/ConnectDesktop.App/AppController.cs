@@ -1,4 +1,8 @@
 using System.Diagnostics;
+using System.Globalization;
+using System.Net;
+using System.Net.NetworkInformation;
+using System.Net.Sockets;
 using System.Reflection;
 using Avalonia.Controls;
 using Avalonia.Threading;
@@ -633,6 +637,110 @@ public sealed class AppController
         return ConnectToPeerAsync(peer, AskPairingCodeAsync, automatic: false);
     }
 
+    /// <summary>
+    /// Conexão manual por endereço ("192.168.0.10" ou "192.168.0.10:47801"; sem porta usa a porta padrão).
+    /// Só no papel principal. Usa o mesmo fluxo da conexão pela descoberta (pede o código se preciso).
+    /// </summary>
+    public async Task ConnectToAddressAsync(string address)
+    {
+        if (Settings.Role != DeviceRole.Primary)
+        {
+            StatusChanged?.Invoke(Loc.Instance["err.not_primary"]);
+            return;
+        }
+
+        if (!TryParseAddress(address, out var host, out var port))
+        {
+            StatusChanged?.Invoke(Loc.Instance["err.invalid_address"]);
+            return;
+        }
+
+        _autoReconnectSuppressed = false;
+        var peer = new PeerInfo(string.Empty, host, DeviceRole.Secondary, host, port, string.Empty, DateTime.UtcNow);
+        await ConnectToPeerAsync(peer, AskPairingCodeAsync, automatic: false);
+    }
+
+    private IReadOnlyList<string> _localIps = Array.Empty<string>();
+    private DateTime _localIpsUtc = DateTime.MinValue;
+    private static readonly TimeSpan LocalIpCacheTtl = TimeSpan.FromSeconds(5);
+
+    /// <summary>IPs IPv4 das interfaces ativas (sem loopback nem 169.254), com as que têm gateway primeiro.</summary>
+    public IReadOnlyList<string> LocalIPv4Addresses
+    {
+        get
+        {
+            try
+            {
+                if (DateTime.UtcNow - _localIpsUtc < LocalIpCacheTtl)
+                    return _localIps;
+
+                var withGateway = new List<string>();
+                var others = new List<string>();
+                foreach (var nic in NetworkInterface.GetAllNetworkInterfaces())
+                {
+                    if (nic.OperationalStatus != OperationalStatus.Up || nic.NetworkInterfaceType == NetworkInterfaceType.Loopback)
+                        continue;
+
+                    var properties = nic.GetIPProperties();
+                    var hasGateway = properties.GatewayAddresses.Any(g =>
+                        g.Address.AddressFamily == AddressFamily.InterNetwork && !g.Address.Equals(IPAddress.Any));
+
+                    foreach (var unicast in properties.UnicastAddresses)
+                    {
+                        var ip = unicast.Address;
+                        if (ip.AddressFamily != AddressFamily.InterNetwork || IPAddress.IsLoopback(ip))
+                            continue;
+                        var bytes = ip.GetAddressBytes();
+                        if (bytes[0] == 169 && bytes[1] == 254)
+                            continue;
+
+                        var text = ip.ToString();
+                        if (withGateway.Contains(text) || others.Contains(text))
+                            continue;
+                        (hasGateway ? withGateway : others).Add(text);
+                    }
+                }
+                _localIps = withGateway.Concat(others).ToList();
+                _localIpsUtc = DateTime.UtcNow;
+                return _localIps;
+            }
+            catch (Exception ex)
+            {
+                Log.Error("Falha ao listar os endereços deste PC.", ex);
+                return Array.Empty<string>();
+            }
+        }
+    }
+
+    /// <summary>Lê "host" ou "host:porta" (IPv4, IPv6 ou nome). Sem porta: NetDefaults.ControlPort.</summary>
+    private static bool TryParseAddress(string input, out string host, out int port)
+    {
+        host = string.Empty;
+        port = NetDefaults.ControlPort;
+        var text = (input ?? string.Empty).Trim();
+        if (text.Length == 0)
+            return false;
+
+        // Só um ':' significa "host:porta" (IPv6 tem vários ':' e fica sem porta).
+        var colon = text.IndexOf(':');
+        if (colon > 0 && text.LastIndexOf(':') == colon)
+        {
+            if (!int.TryParse(text[(colon + 1)..], NumberStyles.None, CultureInfo.InvariantCulture, out port)
+                || port < 1 || port > 65535)
+                return false;
+            text = text[..colon];
+        }
+
+        if (text.Length == 0 || text.Any(char.IsWhiteSpace))
+            return false;
+        if (IPAddress.TryParse(text, out _) || Uri.CheckHostName(text) == UriHostNameType.Dns)
+        {
+            host = text;
+            return true;
+        }
+        return false;
+    }
+
     /// <summary>Desconecta a sessão atual. Não reconecta sozinho até o usuário conectar de novo.</summary>
     public async Task DisconnectAsync()
     {
@@ -699,19 +807,19 @@ public sealed class AppController
             return;
         }
 
-        if (_primarySession is not null)
-        {
-            if (automatic)
-                return;
-            await DisconnectInternalAsync();
-        }
+        if (_primarySession is not null && automatic)
+            return;
 
+        // Marca antes de desconectar: um segundo clique durante a troca de sessão também fica bloqueado.
         _connecting = true;
         if (!automatic)
             StatusChanged?.Invoke(Loc.Instance.Format("status.connecting", peer.Name));
 
         try
         {
+            if (_primarySession is not null)
+                await DisconnectInternalAsync();
+
             var channel = await SecureChannel.ConnectAsync(peer.Address, peer.TcpPort, identity, store, askPairingCode);
             await StartPrimarySessionAsync(channel, peer);
         }
@@ -741,6 +849,13 @@ public sealed class AppController
             await SafeDisposeAsync(channel);
             return;
         }
+
+        // Id e nome vêm do próprio canal (a conexão por IP não conhece o PC antes de parear).
+        peer = peer with
+        {
+            Id = string.IsNullOrEmpty(channel.RemoteDeviceId) ? peer.Id : channel.RemoteDeviceId,
+            Name = string.IsNullOrWhiteSpace(channel.RemoteDeviceName) ? peer.Name : channel.RemoteDeviceName
+        };
 
         IInputCapture? capture = null;
         ClipboardSync? clipboard = null;

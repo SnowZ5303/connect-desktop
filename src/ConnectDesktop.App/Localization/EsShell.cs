@@ -89,6 +89,11 @@ internal static class EsShell
         ["conn.update_banner"] = "Nueva versión v{0} disponible",
         ["conn.update_now"] = "Actualizar ahora",
         ["conn.update_failed"] = "No se pudo actualizar: {0}",
+        ["conn.or"] = "o",
+        ["conn.connect_by_ip"] = "conectar por IP",
+        ["conn.ip_placeholder"] = "Ej.: 192.168.0.10 o 192.168.0.10:47801",
+        ["conn.connect"] = "Conectar",
+        ["conn.this_ip"] = "IP de este PC: {0}",
 
         // Diálogo de código de pareamento
         ["dialog.pair_title"] = "Emparejamiento",
@@ -118,6 +123,8 @@ internal static class EsShell
         ["err.cancelled"] = "Emparejamiento cancelado.",
         ["err.unknown_pairing"] = "El otro PC no reconoce este emparejamiento. Olvide el emparejamiento en 'Pares guardados' y conecte de nuevo para emparejar con código.",
         ["err.refused"] = "Emparejamiento rechazado por el otro PC.",
+        ["err.invalid_address"] = "Dirección no válida. Use una IP como 192.168.0.10 o 192.168.0.10:47801.",
+        ["err.not_primary"] = "Solo es posible conectarse a otro PC con el rol principal. Elija 'Este es el PC principal' en la pantalla Conexión.",
         ["update.none"] = "No hay actualizaciones disponibles.",
     };
 }

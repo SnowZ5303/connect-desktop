@@ -152,6 +152,7 @@
             </Button>
           </StackPanel>
           <TextBlock Classes="muted" HorizontalAlignment="Center" Text="{s:Tr conn.pair_hint}" />
+          <TextBlock x:Name="LocalIpText" Classes="muted" HorizontalAlignment="Center" IsVisible="False" />
         </StackPanel>
       </Border>
 
@@ -185,6 +186,7 @@
           <TextBlock Classes="muted" TextWrapping="Wrap" Text="{s:Tr conn.escape_hint}" />
 
           <Border Background="{DynamicResource InputBrush}" CornerRadius="12" Padding="16,10">
+            <StackPanel Spacing="10">
             <Grid ColumnDefinitions="*,Auto" VerticalAlignment="Center">
               <TextBlock x:Name="SummaryText" VerticalAlignment="Center" TextWrapping="Wrap" />
               <Button x:Name="DisconnectButton" Grid.Column="1" Classes="tile" Height="40" MinWidth="150"
@@ -194,13 +196,29 @@
                   <TextBlock Text="{s:Tr conn.disconnect}" VerticalAlignment="Center" />
                 </StackPanel>
               </Button>
-              <Button x:Name="ChooseDeviceLink" Grid.Column="1" Classes="link" Click="OnChooseDeviceClick">
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                  <TextBlock Text="{s:Tr conn.choose_device}" VerticalAlignment="Center" />
-                  <Path Classes="icon accent" Data="{StaticResource IconArrowRight}" Width="18" Height="18" />
-                </StackPanel>
-              </Button>
+              <StackPanel x:Name="ChooseRow" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Spacing="6">
+                <Button x:Name="ChooseDeviceLink" Classes="link" Click="OnChooseDeviceClick">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <TextBlock Text="{s:Tr conn.choose_device}" VerticalAlignment="Center" />
+                    <Path Classes="icon accent" Data="{StaticResource IconArrowRight}" Width="18" Height="18" />
+                  </StackPanel>
+                </Button>
+                <TextBlock Classes="muted" Text="{s:Tr conn.or}" VerticalAlignment="Center" />
+                <Button x:Name="ConnectByIpLink" Classes="link" Click="OnConnectByIpLinkClick"
+                        Content="{s:Tr conn.connect_by_ip}" />
+              </StackPanel>
             </Grid>
+            <StackPanel x:Name="IpPanel" Spacing="8" IsVisible="False">
+              <Grid ColumnDefinitions="*,Auto">
+                <TextBox x:Name="IpBox" Classes="field" Watermark="{s:Tr conn.ip_placeholder}" KeyDown="OnIpKeyDown" />
+                <Button x:Name="ConnectIpButton" Grid.Column="1" Classes="primary" MinWidth="130" Margin="10,0,0,0"
+                        Click="OnConnectByIpClick">
+                  <TextBlock Text="{s:Tr conn.connect}" />
+                </Button>
+              </Grid>
+              <ProgressBar x:Name="IpProgress" IsIndeterminate="True" IsVisible="False" Height="4" />
+            </StackPanel>
+            </StackPanel>
           </Border>
         </StackPanel>
       </Border>

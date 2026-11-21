@@ -43,6 +43,7 @@ Para voltar o controle para o PC principal na hora, pressione **Ctrl+Alt+Esc**.
   - **UDP 47800**: descoberta dos computadores na rede.
   - **TCP 47801**: conexão de controle.
 - O instalador do Windows já cria a regra de firewall para o app. Se a conexão falhar, confira se o firewall permite essas portas.
+- **O outro PC não aparece na lista?** Alguns roteadores bloqueiam a descoberta entre o PC no cabo e o PC no Wi-Fi. Use **Dispositivos > Conectar por IP** e digite o IP que aparece na tela Conexão do PC secundário (ex.: `192.168.0.104`).
 
 ## Permissões
 

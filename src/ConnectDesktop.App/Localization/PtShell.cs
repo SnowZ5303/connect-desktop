@@ -78,6 +78,11 @@ internal static class PtShell
         ["conn.summary_none"] = "Nenhum PC conectado.",
         ["conn.disconnect"] = "Desconectar",
         ["conn.choose_device"] = "Escolher um PC em Dispositivos",
+        ["conn.or"] = "ou",
+        ["conn.connect_by_ip"] = "conectar por IP",
+        ["conn.ip_placeholder"] = "Ex.: 192.168.0.10 ou 192.168.0.10:47801",
+        ["conn.connect"] = "Conectar",
+        ["conn.this_ip"] = "IP deste PC: {0}",
         ["conn.clipboard"] = "Compartilhar área de transferência",
         ["conn.updates_on_start"] = "Procurar atualizações ao abrir",
         ["conn.check_updates"] = "Verificar atualizações",
@@ -118,6 +123,8 @@ internal static class PtShell
         ["err.cancelled"] = "Pareamento cancelado.",
         ["err.unknown_pairing"] = "O outro PC não reconhece este pareamento. Esqueça o pareamento em 'Pares salvos' e conecte de novo para parear com código.",
         ["err.refused"] = "Pareamento recusado pelo outro PC.",
+        ["err.invalid_address"] = "Endereço inválido. Use um IP como 192.168.0.10 ou 192.168.0.10:47801.",
+        ["err.not_primary"] = "Só é possível conectar a outro PC pelo papel principal. Escolha 'Este é o PC principal' na tela Conexão.",
         ["update.none"] = "Nenhuma atualização disponível.",
     };
 }
