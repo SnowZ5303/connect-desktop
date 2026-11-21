@@ -41,6 +41,10 @@ internal sealed class TransferEntry
 
     // Envio: resultado vindo do outro PC (FileResult)
     public TaskCompletionSource<(bool Ok, string Error)>? Result { get; set; }
+    /// <summary>Recebimento de pasta: o .zip já chegou inteiro e a extração roda localmente. Queda do canal e Cancel não mexem nela; só o Dispose interrompe.</summary>
+    public bool Extracting { get; set; }
+    /// <summary>Envio de pasta: pasta temporária com o .zip (apagada ao terminar a transferência).</summary>
+    public string? TempDir { get; set; }
     /// <summary>FileResult(Ok) recebido antes de <see cref="Result"/> existir; consumido ao criar o Result.</summary>
     public (bool Ok, string Error)? EarlyResult { get; set; }
 

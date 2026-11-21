@@ -17,11 +17,13 @@ public sealed class FakeChannelPair : IAsyncDisposable
     private readonly Endpoint _b;
     private int _closed;
 
-    public FakeChannelPair(string idA = "id-a", string nameA = "PC-A", string idB = "id-b", string nameB = "PC-B")
+    public FakeChannelPair(string idA = "id-a", string nameA = "PC-A", string idB = "id-b", string nameB = "PC-B",
+                           string versionA = "1.0.4", string versionB = "1.0.4")
     {
         // A lê o que chega em _toA e escreve em _toB; B faz o contrário.
-        _a = new Endpoint(this, _toA, _toB, idB, nameB);
-        _b = new Endpoint(this, _toB, _toA, idA, nameA);
+        // RemoteVersion de cada lado é a versão do outro: A recebe versionB, B recebe versionA.
+        _a = new Endpoint(this, _toA, _toB, idB, nameB, versionB);
+        _b = new Endpoint(this, _toB, _toA, idA, nameA, versionA);
     }
 
     public IMessageChannel A => _a;
@@ -50,17 +52,19 @@ public sealed class FakeChannelPair : IAsyncDisposable
         private readonly Channel<Message> _inbox;
         private readonly Channel<Message> _outbox;
 
-        public Endpoint(FakeChannelPair pair, Channel<Message> inbox, Channel<Message> outbox, string remoteId, string remoteName)
+        public Endpoint(FakeChannelPair pair, Channel<Message> inbox, Channel<Message> outbox, string remoteId, string remoteName, string remoteVersion)
         {
             _pair = pair;
             _inbox = inbox;
             _outbox = outbox;
             RemoteDeviceId = remoteId;
             RemoteDeviceName = remoteName;
+            RemoteVersion = remoteVersion;
         }
 
         public string RemoteDeviceId { get; }
         public string RemoteDeviceName { get; }
+        public string RemoteVersion { get; }
 
         public event Action? Closed;
 

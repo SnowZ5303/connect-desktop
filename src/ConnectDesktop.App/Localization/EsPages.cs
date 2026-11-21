@@ -112,6 +112,9 @@ internal static class EsPages
         ["settings.appearance.apply"] = "Aplicar",
         ["settings.appearance.invalidHex"] = "Use el formato #RRGGBB.",
         ["settings.appearance.applied"] = "Color aplicado.",
+        ["settings.navTitle"] = "Menú lateral",
+        ["settings.navHint"] = "Arrastre los elementos del menú para cambiar su orden.",
+        ["settings.navReset"] = "Restaurar orden predeterminado",
 
         // Configurações > Idioma
         ["settings.language.title"] = "Idioma",

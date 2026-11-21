@@ -374,4 +374,25 @@ public sealed class SecureChannelTests : IDisposable
         Assert.Equal(0, Volatile.Read(ref askCalls));
         Assert.Equal(keyOnMain, priStore.GetKey(secId.Id));
     }
+
+    [Fact]
+    public async Task RemoteVersion_chega_aos_dois_lados()
+    {
+        using var cts = NewTimeout();
+        var secId = new DeviceIdentity(Guid.NewGuid().ToString("N"), "Secundario", "1.0.3");
+        var priId = new DeviceIdentity(Guid.NewGuid().ToString("N"), "Principal", "1.0.4");
+        await using var listener = new ControlListener(secId, new PairingStore(_temp.File("sec.json")), () => "123456", 0);
+        listener.Start();
+        var accepted = Accepted(listener);
+
+        var main = await SecureChannel.ConnectAsync("127.0.0.1", listener.Port, priId, new PairingStore(_temp.File("pri.json")),
+            () => Task.FromResult<string?>("123456"), cts.Token);
+        await using var mainCh = main;
+        var sec = await accepted.Reader.ReadAsync(cts.Token);
+        await using var secCh = sec;
+
+        // Cada lado vê a versão do outro.
+        Assert.Equal("1.0.3", main.RemoteVersion);
+        Assert.Equal("1.0.4", sec.RemoteVersion);
+    }
 }

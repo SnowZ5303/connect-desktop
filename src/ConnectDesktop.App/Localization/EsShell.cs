@@ -109,6 +109,10 @@ internal static class EsShell
         ["err.act.secondary"] = "iniciar el modo secundario",
         ["err.act.pairing_code"] = "generar el código de emparejamiento",
         ["err.act.accept"] = "aceptar la conexión",
+        ["err.act.drop"] = "activar arrastrar entre PCs",
+        ["err.act.drop_send"] = "enviar lo arrastrado",
+        ["err.act.open_link"] = "abrir el enlace",
+        ["err.act.open_folder"] = "abrir la carpeta de descargas",
         ["err.report"] = "No se pudo {0}: {1}",
         ["err.perm_default"] = "Permisos insuficientes para compartir el teclado y el mouse.",
         ["err.perm_check"] = "No se pudieron verificar los permisos: {0}",
@@ -126,5 +130,14 @@ internal static class EsShell
         ["err.invalid_address"] = "Dirección no válida. Use una IP como 192.168.0.10 o 192.168.0.10:47801.",
         ["err.not_primary"] = "Solo es posible conectarse a otro PC con el rol principal. Elija 'Este es el PC principal' en la pantalla Conexión.",
         ["update.none"] = "No hay actualizaciones disponibles.",
+
+        // Arrastrar y soltar entre los PCs (franja en el borde)
+        ["drop.hint"] = "Suelte para enviar al otro PC",
+        ["drop.sending"] = "Enviando {0} elemento(s) a {1}",
+        ["drop.url_sent"] = "Enlace enviado al otro PC.",
+        ["drop.url_clipboard"] = "El otro PC es de una versión anterior: el enlace se copió en su portapapeles",
+        ["drop.url_opened"] = "Enlace abierto en este PC.",
+        ["drop.text_sent"] = "Texto copiado en el portapapeles del otro PC.",
+        ["drop.text_too_big"] = "El texto es demasiado grande para enviar (límite de 512 KB).",
     };
 }

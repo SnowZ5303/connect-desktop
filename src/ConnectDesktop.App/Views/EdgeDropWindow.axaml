@@ -1,0 +1,35 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:s="using:ConnectDesktop.App.Services"
+        x:Class="ConnectDesktop.App.Views.EdgeDropWindow"
+        Width="14" Height="14"
+        SystemDecorations="None"
+        ShowInTaskbar="False"
+        ShowActivated="False"
+        Topmost="True"
+        CanResize="False"
+        WindowStartupLocation="Manual"
+        TransparencyLevelHint="Transparent"
+        Background="Transparent">
+
+  <Window.Styles>
+    <Style Selector="Border#Strip">
+      <Setter Property="Opacity" Value="0.55" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+    </Style>
+    <Style Selector="Border#Strip.hot">
+      <Setter Property="Opacity" Value="1" />
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    </Style>
+  </Window.Styles>
+
+  <Border x:Name="Strip" Background="{DynamicResource AccentGlowBrush}" BorderThickness="1">
+    <StackPanel x:Name="LabelPanel" Orientation="Horizontal" Spacing="4"
+                HorizontalAlignment="Center" VerticalAlignment="Center">
+      <Path Data="{StaticResource IconArrowRight}" Width="9" Height="9" Stretch="Uniform"
+            Fill="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
+      <TextBlock Text="{s:Tr drop.hint}" FontSize="9" FontWeight="SemiBold"
+                 Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
+    </StackPanel>
+  </Border>
+</Window>

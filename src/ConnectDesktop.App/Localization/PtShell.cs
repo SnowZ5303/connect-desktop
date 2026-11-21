@@ -125,6 +125,19 @@ internal static class PtShell
         ["err.refused"] = "Pareamento recusado pelo outro PC.",
         ["err.invalid_address"] = "Endereço inválido. Use um IP como 192.168.0.10 ou 192.168.0.10:47801.",
         ["err.not_primary"] = "Só é possível conectar a outro PC pelo papel principal. Escolha 'Este é o PC principal' na tela Conexão.",
+        ["err.act.drop"] = "ativar o arrastar entre PCs",
+        ["err.act.drop_send"] = "enviar o que foi arrastado",
+        ["err.act.open_link"] = "abrir o link",
+        ["err.act.open_folder"] = "abrir a pasta de downloads",
         ["update.none"] = "Nenhuma atualização disponível.",
+
+        // Arrastar e soltar entre os PCs (faixa na borda)
+        ["drop.hint"] = "Solte para enviar ao outro PC",
+        ["drop.sending"] = "Enviando {0} item(ns) para {1}",
+        ["drop.url_sent"] = "Link enviado para o outro PC.",
+        ["drop.url_clipboard"] = "O outro PC é de uma versão antiga: o link foi copiado na área de transferência dele",
+        ["drop.url_opened"] = "Link aberto neste PC.",
+        ["drop.text_sent"] = "Texto copiado na área de transferência do outro PC.",
+        ["drop.text_too_big"] = "O texto é grande demais para enviar (limite de 512 KB).",
     };
 }

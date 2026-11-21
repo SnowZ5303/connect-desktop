@@ -44,6 +44,7 @@ public sealed class SecureChannel : IMessageChannel
     private NetworkStream _stream = null!;
     private string _remoteId = string.Empty;
     private string _remoteName = string.Empty;
+    private string _remoteVersion = string.Empty;
     private AesGcm? _sendAes;
     private AesGcm? _recvAes;
     private ulong _sendCounter;
@@ -55,6 +56,7 @@ public sealed class SecureChannel : IMessageChannel
 
     public string RemoteDeviceId => _remoteId;
     public string RemoteDeviceName => _remoteName;
+    public string RemoteVersion => _remoteVersion;
     public event Action? Closed;
 
     /// <summary>
@@ -126,7 +128,7 @@ public sealed class SecureChannel : IMessageChannel
 
             var kC2S = DeriveKey(secret, transcript, "cd-c2s");
             var kS2C = DeriveKey(secret, transcript, "cd-s2c");
-            return Create(client, server.Id, server.Name, sendKey: kC2S, recvKey: kS2C);
+            return Create(client, server.Id, server.Name, server.Version, sendKey: kC2S, recvKey: kS2C);
         });
     }
 
@@ -200,7 +202,7 @@ public sealed class SecureChannel : IMessageChannel
 
             var kC2S = DeriveKey(secret, transcript, "cd-c2s");
             var kS2C = DeriveKey(secret, transcript, "cd-s2c");
-            return Create(client, peerHello.Id, peerHello.Name, sendKey: kS2C, recvKey: kC2S);
+            return Create(client, peerHello.Id, peerHello.Name, peerHello.Version, sendKey: kS2C, recvKey: kC2S);
         });
     }
 
@@ -252,7 +254,7 @@ public sealed class SecureChannel : IMessageChannel
                 if (body == null)
                     ended = true;
                 else
-                    message = DecryptAndDecode(body);
+                    message = DecryptAndDecode(body);   // null = tipo desconhecido (compatibilidade futura)
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
@@ -277,7 +279,11 @@ public sealed class SecureChannel : IMessageChannel
                 yield break;
             }
 
-            yield return message!;
+            // Tipo que este app não conhece: pula a mensagem sem fechar o canal.
+            if (message == null)
+                continue;
+
+            yield return message;
         }
     }
 
@@ -317,7 +323,7 @@ public sealed class SecureChannel : IMessageChannel
             Closed?.Invoke();
     }
 
-    private Message DecryptAndDecode(byte[] body)
+    private Message? DecryptAndDecode(byte[] body)
     {
         if (body.Length < CounterSize + TagSize)
             throw new IOException("Quadro cifrado inválido.");
@@ -333,6 +339,10 @@ public sealed class SecureChannel : IMessageChannel
             body.AsSpan(CounterSize + cipherLength, TagSize),
             plaintext);
         _lastRecvCounter = counter;
+
+        // Tipo não definido no enum: ignora (o formato dos tipos conhecidos continua sendo validado pelo Decode).
+        if (plaintext.Length > 0 && !Enum.IsDefined(typeof(MessageType), plaintext[0]))
+            return null;
         return MessageCodec.Decode(plaintext);
     }
 
@@ -343,7 +353,7 @@ public sealed class SecureChannel : IMessageChannel
         return nonce;
     }
 
-    private static SecureChannel Create(TcpClient client, string remoteId, string remoteName, byte[] sendKey, byte[] recvKey)
+    private static SecureChannel Create(TcpClient client, string remoteId, string remoteName, string remoteVersion, byte[] sendKey, byte[] recvKey)
     {
         return new SecureChannel
         {
@@ -351,6 +361,7 @@ public sealed class SecureChannel : IMessageChannel
             _stream = client.GetStream(),
             _remoteId = remoteId,
             _remoteName = remoteName,
+            _remoteVersion = remoteVersion,
             _sendAes = new AesGcm(sendKey, TagSize),
             _recvAes = new AesGcm(recvKey, TagSize),
         };
@@ -482,7 +493,7 @@ public sealed class SecureChannel : IMessageChannel
         }
     }
 
-    private sealed record HelloInfo(string Tag, string Id, string Name, string Pub, bool KnowsClient);
+    private sealed record HelloInfo(string Tag, string Id, string Name, string Pub, bool KnowsClient, string Version);
 
     private static byte[] BuildClientHello(DeviceIdentity me, byte[] publicKey) =>
         JsonSerializer.SerializeToUtf8Bytes(new
@@ -492,6 +503,7 @@ public sealed class SecureChannel : IMessageChannel
             name = me.Name,
             pub = Convert.ToBase64String(publicKey),
             nonce = Convert.ToBase64String(RandomNumberGenerator.GetBytes(NonceRandomSize)),
+            version = me.Version,
         }, JsonOptions);
 
     private static byte[] BuildServerHello(DeviceIdentity me, byte[] publicKey, bool knowsClient) =>
@@ -502,6 +514,7 @@ public sealed class SecureChannel : IMessageChannel
             name = me.Name,
             pub = Convert.ToBase64String(publicKey),
             nonce = Convert.ToBase64String(RandomNumberGenerator.GetBytes(NonceRandomSize)),
+            version = me.Version,
             knowsClient,
         }, JsonOptions);
 
@@ -510,8 +523,12 @@ public sealed class SecureChannel : IMessageChannel
         using var doc = JsonDocument.Parse(body);
         var root = doc.RootElement;
         var knows = root.TryGetProperty("knowsClient", out var k) && k.ValueKind == JsonValueKind.True;
+        // "version" é opcional: versões antigas não enviam o campo.
+        var version = root.TryGetProperty("version", out var v) && v.ValueKind == JsonValueKind.String
+            ? v.GetString() ?? string.Empty
+            : string.Empty;
         return new HelloInfo(GetString(root, "tag"), GetString(root, "id"), GetString(root, "name"),
-                             GetString(root, "pub"), knows);
+                             GetString(root, "pub"), knows, version);
     }
 
     private static (string Mode, byte[] Mac) ParseClientAuth(byte[] body)

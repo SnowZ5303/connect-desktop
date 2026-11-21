@@ -263,4 +263,50 @@ public sealed class FileTransferServiceTests
         Assert.Equal(TransferState.Completed, final.State);
         Assert.Equal(TransferDirection.Incoming, final.Direction);
     }
+
+    [Fact]
+    public async Task SendFolder_vai_e_volta_com_subpastas_e_acentos()
+    {
+        await using var h = new Harness();
+        var folderName = "pasta ação " + Guid.NewGuid().ToString("N");
+        var root = Path.Combine(h.SrcDir, folderName);
+        var files = new Dictionary<string, byte[]>
+        {
+            ["raiz.txt"] = Encoding.UTF8.GetBytes("raiz"),
+            [Path.Combine("sub", "arquivo çã.txt")] = Encoding.UTF8.GetBytes("acentos ção"),
+            [Path.Combine("sub", "fundo", "bin.dat")] = RandomNumberGenerator.GetBytes(100000),
+        };
+        foreach (var (relative, data) in files)
+        {
+            var full = Path.Combine(root, relative);
+            Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+            File.WriteAllBytes(full, data);
+        }
+
+        // O zip temporário do remetente tem o nome "<pasta>.cdfolder.zip" dentro de ConnectDesktop-Send.
+        var tempZip = Path.Combine(Path.GetTempPath(), "ConnectDesktop-Send", folderName + FileTransferService.FolderArchiveSuffix);
+
+        var id = h.A.SendFolder(root);
+
+        var sent = await WaitFinal(h.A, id);
+        Assert.Equal(TransferState.Completed, sent.State);
+
+        var received = await WaitFinal(h.B, id);
+        Assert.Equal(TransferState.Completed, received.State);
+        Assert.NotNull(received.LocalPath);
+
+        // LocalPath é a pasta extraída, com o nome sem o sufixo, dentro do destino.
+        Assert.True(Directory.Exists(received.LocalPath));
+        Assert.Equal(Path.GetFullPath(Path.Combine(h.DstB, folderName)), Path.GetFullPath(received.LocalPath!));
+
+        foreach (var (relative, data) in files)
+            Assert.Equal(data, File.ReadAllBytes(Path.Combine(received.LocalPath!, relative)));
+        Assert.Equal(files.Count, Directory.GetFiles(received.LocalPath!, "*", SearchOption.AllDirectories).Length);
+
+        // O .zip recebido foi apagado depois da extração.
+        Assert.Empty(Directory.GetFiles(h.DstB, "*" + FileTransferService.FolderArchiveSuffix, SearchOption.AllDirectories));
+
+        // O zip temporário do remetente é apagado quando a transferência termina.
+        await Wait.Until(() => !File.Exists(tempZip), what: "zip temporário do remetente apagado");
+    }
 }

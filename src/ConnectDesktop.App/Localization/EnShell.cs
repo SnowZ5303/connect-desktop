@@ -109,6 +109,10 @@ internal static class EnShell
         ["err.act.secondary"] = "start secondary mode",
         ["err.act.pairing_code"] = "generate the pairing code",
         ["err.act.accept"] = "accept the connection",
+        ["err.act.drop"] = "enable drag and drop between PCs",
+        ["err.act.drop_send"] = "send the dragged items",
+        ["err.act.open_link"] = "open the link",
+        ["err.act.open_folder"] = "open the downloads folder",
         ["err.report"] = "Could not {0}: {1}",
         ["err.perm_default"] = "Insufficient permissions to share the keyboard and mouse.",
         ["err.perm_check"] = "Could not check permissions: {0}",
@@ -126,5 +130,14 @@ internal static class EnShell
         ["err.invalid_address"] = "Invalid address. Use an IP such as 192.168.0.10 or 192.168.0.10:47801.",
         ["err.not_primary"] = "You can only connect to another PC from the main role. Choose 'This is the main PC' on the Connection screen.",
         ["update.none"] = "No updates available.",
+
+        // Drag and drop between PCs (edge strip)
+        ["drop.hint"] = "Drop to send to the other PC",
+        ["drop.sending"] = "Sending {0} item(s) to {1}",
+        ["drop.url_sent"] = "Link sent to the other PC.",
+        ["drop.url_clipboard"] = "The other PC runs an older version: the link was copied to its clipboard",
+        ["drop.url_opened"] = "Link opened on this PC.",
+        ["drop.text_sent"] = "Text copied to the clipboard of the other PC.",
+        ["drop.text_too_big"] = "The text is too large to send (limit of 512 KB).",
     };
 }

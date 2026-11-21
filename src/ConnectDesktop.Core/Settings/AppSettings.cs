@@ -129,5 +129,9 @@ public sealed class AppSettings
         }
     }
 
-    public DeviceIdentity ToIdentity() => new(DeviceId, DeviceName);
+    /// <summary>Ordem dos itens do menu lateral (ids: "connection", "devices", "transfers", "pairs"). Vazia = ordem padrão.</summary>
+    public List<string> NavOrder { get; set; } = new();
+
+    /// <param name="version">Versão do app ("1.0.4"), enviada no handshake.</param>
+    public DeviceIdentity ToIdentity(string version = "") => new(DeviceId, DeviceName, version);
 }

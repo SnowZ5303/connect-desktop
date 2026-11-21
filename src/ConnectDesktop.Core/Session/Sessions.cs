@@ -36,6 +36,7 @@ public sealed class PrimarySession : IAsyncDisposable
     private readonly Channel<Message> _outbox = Channel.CreateUnbounded<Message>(new UnboundedChannelOptions { SingleReader = true });
     private readonly CancellationTokenSource _cts = new();
     private readonly HashSet<ushort> _pressedKeys = new();
+    private readonly HashSet<MouseButton> _heldButtons = new();
     private readonly object _lock = new();
 
     private PrimaryState _state = PrimaryState.Local;
@@ -81,6 +82,8 @@ public sealed class PrimarySession : IAsyncDisposable
     public event Action<PrimaryState>? StateChanged;
     /// <summary>Disparado quando a sessão termina (canal fechou ou Dispose).</summary>
     public event Action? Ended;
+    /// <summary>Mensagens de aplicação recebidas (OpenUrl, DropBatch), disparadas fora do laço de leitura.</summary>
+    public event Action<Message>? AppMessage;
 
     public void Start()
     {
@@ -156,6 +159,9 @@ public sealed class PrimarySession : IAsyncDisposable
                     _outbox.Writer.TryWrite(new MouseMoveMessage(e.DX, e.DY));
                 return;
             }
+
+            // Com botão pressionado (ex.: arrastando arquivo), o cursor não pode pular para o outro PC.
+            if (_heldButtons.Count > 0) return;
         }
 
         var side = SecondarySide;
@@ -166,6 +172,7 @@ public sealed class PrimarySession : IAsyncDisposable
         lock (_lock)
         {
             if (_disposed || _state != PrimaryState.Local) return;
+            if (_heldButtons.Count > 0) return;
             _state = PrimaryState.Remote;
             _pressedKeys.Clear();
             var position = ScreenLayout.PositionAlongEdge(bounds, side, e.X, e.Y);
@@ -180,6 +187,9 @@ public sealed class PrimarySession : IAsyncDisposable
     {
         lock (_lock)
         {
+            if (e.Down) _heldButtons.Add(e.Button);
+            else _heldButtons.Remove(e.Button);
+
             if (_state != PrimaryState.Remote) return;
             _outbox.Writer.TryWrite(new MouseButtonMessage(e.Button, e.Down));
         }
@@ -246,6 +256,7 @@ public sealed class PrimarySession : IAsyncDisposable
     {
         lock (_lock)
         {
+            if (reason != ReturnReason.Leave) _heldButtons.Clear();
             if (_state != PrimaryState.Remote) return;
             _state = PrimaryState.Local;
             _pressedKeys.Clear();
@@ -310,6 +321,10 @@ public sealed class PrimarySession : IAsyncDisposable
             case FileResultMessage:
                 ForwardFileMessage(message);
                 break;
+            case OpenUrlMessage:
+            case DropBatchMessage:
+                RaiseAppMessage(message);
+                break;
         }
     }
 
@@ -351,6 +366,25 @@ public sealed class PrimarySession : IAsyncDisposable
         {
             Debug.WriteLine($"[PrimarySession] fila de envio encerrada: {ex.Message}");
         }
+    }
+
+    private void RaiseAppMessage(Message message)
+    {
+        var handler = AppMessage;
+        if (handler == null) return;
+
+        // Fora do laço de leitura: o handler não pode travar a recepção.
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                handler(message);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[Session] falha em mensagem de aplicação: {ex.Message}");
+            }
+        });
     }
 
     private void ForwardFileMessage(Message message)
@@ -441,6 +475,8 @@ public sealed class SecondarySession : IAsyncDisposable
 
     public event Action<bool>? ActiveChanged;
     public event Action? Ended;
+    /// <summary>Mensagens de aplicação recebidas (OpenUrl, DropBatch), disparadas fora do laço de leitura.</summary>
+    public event Action<Message>? AppMessage;
 
     public void Start()
     {
@@ -525,6 +561,10 @@ public sealed class SecondarySession : IAsyncDisposable
             case FileCancelMessage:
             case FileResultMessage:
                 ForwardFileMessage(message);
+                break;
+            case OpenUrlMessage:
+            case DropBatchMessage:
+                RaiseAppMessage(message);
                 break;
         }
     }
@@ -709,6 +749,25 @@ public sealed class SecondarySession : IAsyncDisposable
         {
             Debug.WriteLine($"[SecondarySession] fila de envio encerrada: {ex.Message}");
         }
+    }
+
+    private void RaiseAppMessage(Message message)
+    {
+        var handler = AppMessage;
+        if (handler == null) return;
+
+        // Fora do laço de leitura: o handler não pode travar a recepção.
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                handler(message);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"[Session] falha em mensagem de aplicação: {ex.Message}");
+            }
+        });
     }
 
     private void ForwardFileMessage(Message message)

@@ -39,6 +39,10 @@ public sealed class MessageCodecTests
         new object[] { new FileCancelMessage(TransferA, "Cancelado pelo usuário.") },
         new object[] { new FileResultMessage(TransferA, true, "") },
         new object[] { new FileResultMessage(TransferA, false, "Disco cheio") },
+        new object[] { new OpenUrlMessage("https://exemplo.com/caminho?q=ação&x=1") },
+        new object[] { new OpenUrlMessage("mailto:pessoa@exemplo.com") },
+        new object[] { new DropBatchMessage(new[] { TransferA, Guid.Parse("66666666-7777-8888-9999-000000000000") }) },
+        new object[] { new DropBatchMessage(Array.Empty<Guid>()) },
     };
 
     /// <summary>Compara por conteúdo: os records comparam byte[] por referência.</summary>
@@ -56,6 +60,10 @@ public sealed class MessageCodecTests
                 var done = Assert.IsType<FileDoneMessage>(actual);
                 Assert.Equal(e.TransferId, done.TransferId);
                 Assert.Equal(e.Sha256, done.Sha256);
+                break;
+            case DropBatchMessage e:
+                var batch = Assert.IsType<DropBatchMessage>(actual);
+                Assert.Equal(e.TransferIds, batch.TransferIds);
                 break;
             default:
                 Assert.Equal(expected, actual);
@@ -276,6 +284,60 @@ public sealed class MessageCodecTests
     public void FileResult_com_bytes_sobrando_no_fim_lanca_FormatException()
     {
         var raw = Bytes(MessageCodec.Encode(new FileResultMessage(TransferA, true, "")), new byte[] { 0xFF });
+        Assert.Throws<FormatException>(() => MessageCodec.Decode(raw));
+    }
+
+    // ---- v1.0.4: OpenUrl e DropBatch (casos inválidos com bytes montados à mão) ----
+
+    [Fact]
+    public void OpenUrl_com_tamanho_de_texto_negativo_lanca_FormatException()
+    {
+        var raw = Bytes(Type(MessageType.OpenUrl), I32(-1));
+        Assert.Throws<FormatException>(() => MessageCodec.Decode(raw));
+    }
+
+    [Fact]
+    public void OpenUrl_com_texto_maior_que_o_restante_lanca_FormatException()
+    {
+        var raw = Bytes(Type(MessageType.OpenUrl), I32(50), Ascii(3));
+        Assert.Throws<FormatException>(() => MessageCodec.Decode(raw));
+    }
+
+    [Fact]
+    public void OpenUrl_com_bytes_sobrando_no_fim_lanca_FormatException()
+    {
+        var raw = Bytes(MessageCodec.Encode(new OpenUrlMessage("https://exemplo.com")), new byte[] { 0xFF });
+        Assert.Throws<FormatException>(() => MessageCodec.Decode(raw));
+    }
+
+    [Fact]
+    public void DropBatch_com_quantidade_negativa_lanca_FormatException()
+    {
+        var raw = Bytes(Type(MessageType.DropBatch), I32(-1));
+        Assert.Throws<FormatException>(() => MessageCodec.Decode(raw));
+    }
+
+    [Fact]
+    public void DropBatch_com_quantidade_acima_de_1000_lanca_FormatException()
+    {
+        // 1001 Guids completos: o limite de quantidade é que tem que recusar.
+        var ids = Enumerable.Range(0, 1001).SelectMany(_ => Guid.NewGuid().ToByteArray()).ToArray();
+        var raw = Bytes(Type(MessageType.DropBatch), I32(1001), ids);
+        Assert.Throws<FormatException>(() => MessageCodec.Decode(raw));
+    }
+
+    [Fact]
+    public void DropBatch_com_quantidade_maior_que_os_guids_presentes_lanca_FormatException()
+    {
+        // Diz 2 Guids, mas só traz 1.
+        var raw = Bytes(Type(MessageType.DropBatch), I32(2), TransferA.ToByteArray());
+        Assert.Throws<FormatException>(() => MessageCodec.Decode(raw));
+    }
+
+    [Fact]
+    public void DropBatch_com_bytes_sobrando_no_fim_lanca_FormatException()
+    {
+        var raw = Bytes(MessageCodec.Encode(new DropBatchMessage(new[] { TransferA })), new byte[] { 0x01 });
         Assert.Throws<FormatException>(() => MessageCodec.Decode(raw));
     }
 }

@@ -10,6 +10,7 @@ using ConnectDesktop.App.Services;
 using ConnectDesktop.Core.Layout;
 using ConnectDesktop.Core.Net;
 using ConnectDesktop.Core.Platform;
+using ConnectDesktop.Core.Protocol;
 using ConnectDesktop.Core.Security;
 using ConnectDesktop.Core.Session;
 using ConnectDesktop.Core.Settings;
@@ -70,6 +71,17 @@ public sealed class AppController
     private bool _restartPending;
     private ReleaseInfo? _pendingUpdate;
 
+    // Arrastar e soltar entre os PCs (v1.0.4)
+    private static readonly TimeSpan DropBatchTimeout = TimeSpan.FromMinutes(10);
+    private const int MaxUrlLength = 2048;
+    private const int MaxDropTextBytes = 512 * 1024;
+    private IMessageChannel? _primaryChannel;
+    private IMessageChannel? _secondaryChannel;
+    private volatile bool _secondaryEntered;
+    private EdgeDropController? _edgeDrop;
+    private readonly HashSet<Guid> _dropBatch = new();
+    private DateTime _dropBatchSinceUtc = DateTime.MinValue;
+
     public AppController()
     {
         AppVersion = ComputeVersion();
@@ -91,6 +103,7 @@ public sealed class AppController
         WarningChanged += (_, _) => RaiseStateChanged();
         UpdateAvailable += _ => RaiseStateChanged();
         Loc.Instance.LanguageChanged += OnLanguageChanged;
+        Files.TransferChanged += _ => Dispatcher.UIThread.Post(() => TryRevealDropBatch());
     }
 
     /// <summary>Configurações carregadas (a UI lê daqui).</summary>
@@ -357,6 +370,45 @@ public sealed class AppController
         RaiseStateChanged();
     }
 
+    // ---------------- Menu lateral ----------------
+
+    /// <summary>Ids reordenáveis do menu lateral, na ordem padrão.</summary>
+    public static IReadOnlyList<string> DefaultNavOrder { get; } = new[] { "connection", "devices", "transfers", "pairs" };
+
+    /// <summary>Ordem efetiva dos itens reordenáveis do menu (ids faltando ou desconhecidos voltam para a ordem padrão).</summary>
+    public IReadOnlyList<string> NavOrder => NormalizeNavOrder(Settings.NavOrder);
+
+    /// <summary>Grava a ordem escolhida no menu (arrastando os itens).</summary>
+    public void SetNavOrder(IReadOnlyList<string> order)
+    {
+        Settings.NavOrder = NormalizeNavOrder(order);
+        SaveSettings();
+    }
+
+    /// <summary>Volta o menu lateral para a ordem padrão.</summary>
+    public void ResetNavOrder()
+    {
+        Settings.NavOrder = new List<string>();
+        SaveSettings();
+        RaiseStateChanged();
+    }
+
+    private static List<string> NormalizeNavOrder(IEnumerable<string>? order)
+    {
+        var result = new List<string>();
+        foreach (var id in order ?? Array.Empty<string>())
+        {
+            if (DefaultNavOrder.Contains(id) && !result.Contains(id))
+                result.Add(id);
+        }
+        foreach (var id in DefaultNavOrder)
+        {
+            if (!result.Contains(id))
+                result.Add(id);
+        }
+        return result;
+    }
+
     private bool IsSessionActive => _primarySession is not null || _secondarySession is not null;
 
     private void StartServices()
@@ -365,7 +417,7 @@ public sealed class AppController
             return;
 
         _permissionsOk = CheckPermissions();
-        var identity = Settings.ToIdentity();
+        var identity = Settings.ToIdentity(AppVersion);
 
         try
         {
@@ -541,20 +593,30 @@ public sealed class AppController
             _secondaryPeerName = channel.RemoteDeviceName;
             clipboard = new ClipboardSync(platform.Clipboard) { Enabled = Settings.ShareClipboard };
             session = new SecondarySession(channel, platform.CreateInjector(), platform.Screen, clipboard);
-            session.ActiveChanged += _ => Dispatcher.UIThread.Post(() =>
+            session.ActiveChanged += active =>
             {
-                if (ReferenceEquals(_secondarySession, session))
-                    UpdateSecondaryStatus();
-            });
+                // O primeiro Enter define o lado do principal (PrimarySide) para a faixa de arrastar.
+                if (active)
+                    _secondaryEntered = true;
+                Dispatcher.UIThread.Post(() =>
+                {
+                    if (ReferenceEquals(_secondarySession, session))
+                        UpdateSecondaryStatus();
+                });
+            };
             session.Ended += () => Dispatcher.UIThread.Post(() => OnSecondaryEnded(session));
+            session.AppMessage += message => Dispatcher.UIThread.Post(() => OnAppMessage(message));
             session.Files = Files;
 
             _secondarySession = session;
             _secondaryClipboard = clipboard;
+            _secondaryChannel = channel;
+            _secondaryEntered = false;
             session.Start();
 
             Log.Info($"Conexão aceita de {_secondaryPeerName}.");
             UpdateSecondaryStatus();
+            UpdateEdgeDrop();
         }
         catch (Exception ex)
         {
@@ -603,7 +665,10 @@ public sealed class AppController
         var clipboard = _secondaryClipboard;
         _secondarySession = null;
         _secondaryClipboard = null;
+        _secondaryChannel = null;
+        _secondaryEntered = false;
         _secondaryPeerName = null;
+        UpdateEdgeDrop();
 
         if (session is null && clipboard is null)
             return;
@@ -799,7 +864,7 @@ public sealed class AppController
         }
 
         var store = Store;
-        var identity = Settings.ToIdentity();
+        var identity = Settings.ToIdentity(AppVersion);
         if (store is null)
         {
             if (!automatic)
@@ -871,11 +936,13 @@ public sealed class AppController
                     UpdatePrimaryStatus();
             });
             session.Ended += () => Dispatcher.UIThread.Post(() => OnPrimaryEnded(session));
+            session.AppMessage += message => Dispatcher.UIThread.Post(() => OnAppMessage(message));
             session.Files = Files;
 
             _primarySession = session;
             _capture = capture;
             _primaryClipboard = clipboard;
+            _primaryChannel = channel;
             _primaryPeerId = peer.Id;
             _primaryPeerName = peer.Name;
             _primaryPeer = peer;
@@ -886,6 +953,7 @@ public sealed class AppController
 
             Log.Info($"Conectado a {peer.Name}.");
             ConnectionChanged?.Invoke();
+            UpdateEdgeDrop();
             UpdatePrimaryStatus();
         }
         catch
@@ -948,9 +1016,11 @@ public sealed class AppController
         _primarySession = null;
         _capture = null;
         _primaryClipboard = null;
+        _primaryChannel = null;
         _primaryPeerId = null;
         _primaryPeerName = null;
         _primaryPeer = null;
+        UpdateEdgeDrop();
 
         if (session is null && capture is null && clipboard is null)
             return;
@@ -992,6 +1062,325 @@ public sealed class AppController
     {
         var owner = OwnerWindow;
         return Dispatcher.UIThread.InvokeAsync(() => PairingCodeDialog.AskAsync(owner));
+    }
+
+    // ---------------- Arrastar e soltar entre os PCs (v1.0.4) ----------------
+
+    /// <summary>Cria a faixa da borda enquanto houver sessão ativa e a descarta quando não houver.</summary>
+    private void UpdateEdgeDrop()
+    {
+        if (!IsSessionActive)
+        {
+            DisposeEdgeDrop();
+            return;
+        }
+        if (_edgeDrop is not null)
+            return;
+
+        EdgeDropController? edge = null;
+        try
+        {
+            edge = new EdgeDropController(GetDropEdge);
+            edge.PathsDropped += OnPathsDropped;
+            edge.UrlDropped += OnUrlDropped;
+            edge.TextDropped += OnTextDropped;
+            edge.Start();
+            _edgeDrop = edge;
+        }
+        catch (Exception ex)
+        {
+            edge?.Dispose();
+            ReportError("err.act.drop", ex);
+        }
+    }
+
+    private void DisposeEdgeDrop()
+    {
+        var edge = _edgeDrop;
+        _edgeDrop = null;
+        if (edge is null)
+            return;
+
+        try
+        {
+            edge.Stop();
+            edge.Dispose();
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Falha ao encerrar a faixa de arrastar.", ex);
+        }
+    }
+
+    /// <summary>Lado da borda onde a faixa fica: no principal, o lado do secundário; no secundário, o lado do principal (depois do primeiro Enter).</summary>
+    private ScreenSide? GetDropEdge()
+    {
+        if (_primarySession is not null)
+            return Settings.SecondarySide;
+
+        var session = _secondarySession;
+        if (session is not null && _secondaryEntered)
+            return session.PrimarySide;
+
+        return null;
+    }
+
+    /// <summary>Canal e nome do outro PC na sessão atual, para o envio do que foi arrastado.</summary>
+    private (IMessageChannel? Channel, string PeerName) DropPeer()
+    {
+        if (_primarySession is not null && _primaryChannel is not null)
+            return (_primaryChannel, _primaryPeerName ?? Loc.Instance["conn.default_secondary"]);
+        if (_secondarySession is not null && _secondaryChannel is not null)
+            return (_secondaryChannel, _secondaryPeerName ?? Loc.Instance["conn.default_primary"]);
+        return (null, string.Empty);
+    }
+
+    private void OnPathsDropped(IReadOnlyList<string> paths)
+    {
+        var (channel, peerName) = DropPeer();
+        if (channel is null)
+            return;
+
+        var ids = new List<Guid>();
+        Exception? failure = null;
+        foreach (var path in paths)
+        {
+            try
+            {
+                if (Directory.Exists(path))
+                    ids.Add(Files.SendFolder(path));
+                else if (File.Exists(path))
+                    ids.Add(Files.SendFile(path));
+            }
+            catch (Exception ex)
+            {
+                failure = ex;
+                Log.Error("Falha ao enviar o item arrastado.", ex);
+            }
+        }
+
+        if (ids.Count > 0)
+        {
+            StatusChanged?.Invoke(Loc.Instance.Format("drop.sending", ids.Count, peerName));
+            if (ProtocolFeatures.Supports(channel.RemoteVersion, ProtocolFeatures.DragAndDrop))
+                _ = SendToPeerAsync(channel, new DropBatchMessage(ids.ToArray()));
+        }
+
+        if (failure is not null)
+            ReportError("err.act.drop_send", failure);
+    }
+
+    private void OnUrlDropped(string url)
+    {
+        var (channel, _) = DropPeer();
+        if (channel is null)
+            return;
+
+        if (ProtocolFeatures.Supports(channel.RemoteVersion, ProtocolFeatures.DragAndDrop))
+        {
+            _ = SendToPeerAsync(channel, new OpenUrlMessage(url));
+            StatusChanged?.Invoke(Loc.Instance["drop.url_sent"]);
+            return;
+        }
+
+        _ = SendToPeerAsync(channel, new ClipboardMessage(url));
+        StatusChanged?.Invoke(Loc.Instance["drop.url_clipboard"]);
+    }
+
+    private void OnTextDropped(string text)
+    {
+        var (channel, _) = DropPeer();
+        if (channel is null)
+            return;
+
+        if (System.Text.Encoding.UTF8.GetByteCount(text) > MaxDropTextBytes)
+        {
+            StatusChanged?.Invoke(Loc.Instance["drop.text_too_big"]);
+            return;
+        }
+
+        _ = SendToPeerAsync(channel, new ClipboardMessage(text));
+        StatusChanged?.Invoke(Loc.Instance["drop.text_sent"]);
+    }
+
+    private async Task SendToPeerAsync(IMessageChannel channel, Message message)
+    {
+        try
+        {
+            await channel.SendAsync(message);
+        }
+        catch (Exception ex)
+        {
+            ReportError("err.act.drop_send", ex);
+        }
+    }
+
+    /// <summary>Mensagens de aplicação do outro PC (já na thread da UI).</summary>
+    private void OnAppMessage(Message message)
+    {
+        switch (message)
+        {
+            case OpenUrlMessage open:
+                OpenIncomingLink(open.Url);
+                break;
+            case DropBatchMessage batch:
+                StartDropBatch(batch.TransferIds);
+                break;
+        }
+    }
+
+    /// <summary>Link vindo do outro PC: só http, https e mailto, até 2048 caracteres.</summary>
+    private void OpenIncomingLink(string url)
+    {
+        var uri = ParseSafeLink(url);
+        if (uri is null)
+        {
+            Log.Info("Link recebido do outro PC foi ignorado (endereço inválido ou esquema não permitido).");
+            return;
+        }
+
+        try
+        {
+            if (OperatingSystem.IsWindows())
+            {
+                StartProcess(new ProcessStartInfo(uri.AbsoluteUri) { UseShellExecute = true });
+            }
+            else
+            {
+                var info = new ProcessStartInfo(OperatingSystem.IsMacOS() ? "open" : "xdg-open") { UseShellExecute = false };
+                info.ArgumentList.Add(uri.AbsoluteUri);
+                StartProcess(info);
+            }
+            StatusChanged?.Invoke(Loc.Instance["drop.url_opened"]);
+        }
+        catch (Exception ex)
+        {
+            ReportError("err.act.open_link", ex);
+        }
+    }
+
+    private static Uri? ParseSafeLink(string url)
+    {
+        if (string.IsNullOrWhiteSpace(url) || url.Length > MaxUrlLength)
+            return null;
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+            return null;
+        return uri.Scheme is "http" or "https" or "mailto" ? uri : null;
+    }
+
+    /// <summary>
+    /// O outro PC avisou que estes Ids foram arrastados. Quando todos terminarem, mostra o resultado.
+    /// Ids ainda desconhecidos ou pendentes contam como pendentes até o limite de <see cref="DropBatchTimeout"/>.
+    /// </summary>
+    private void StartDropBatch(Guid[] ids)
+    {
+        if (ids.Length == 0)
+            return;
+
+        if (_dropBatch.Count == 0)
+            _dropBatchSinceUtc = DateTime.UtcNow;
+        foreach (var id in ids)
+            _dropBatch.Add(id);
+
+        TryRevealDropBatch();
+        if (_dropBatch.Count > 0)
+        {
+            // Confere de novo depois do limite, mesmo que nenhuma transferência mude de estado.
+            _ = Task.Delay(DropBatchTimeout + TimeSpan.FromSeconds(1))
+                .ContinueWith(_ => Dispatcher.UIThread.Post(() => TryRevealDropBatch()), TaskScheduler.Default);
+        }
+    }
+
+    private void TryRevealDropBatch()
+    {
+        if (_dropBatch.Count == 0)
+            return;
+
+        var timedOut = DateTime.UtcNow - _dropBatchSinceUtc >= DropBatchTimeout;
+        var byId = new Dictionary<Guid, TransferInfo>();
+        foreach (var info in Files.Transfers)
+            byId[info.Id] = info;
+
+        var waiting = false;
+        var completed = new List<TransferInfo>();
+        foreach (var id in _dropBatch)
+        {
+            if (byId.TryGetValue(id, out var info) && IsFinished(info.State))
+            {
+                if (info.State == TransferState.Completed)
+                    completed.Add(info);
+            }
+            else if (!timedOut)
+            {
+                waiting = true;
+            }
+        }
+
+        if (waiting)
+            return;
+
+        _dropBatch.Clear();
+        RevealDropped(completed);
+    }
+
+    private static bool IsFinished(TransferState state)
+        => state is TransferState.Completed or TransferState.Failed or TransferState.Canceled;
+
+    /// <summary>Um item concluído: mostra o arquivo na pasta. Vários: abre a pasta de downloads.</summary>
+    private void RevealDropped(IReadOnlyList<TransferInfo> completed)
+    {
+        if (completed.Count == 0)
+            return;
+
+        try
+        {
+            var single = completed.Count == 1 ? completed[0].LocalPath : null;
+            if (!string.IsNullOrEmpty(single))
+                RevealFile(single);
+            else
+                OpenFolder(Files.DownloadDir);
+        }
+        catch (Exception ex)
+        {
+            ReportError("err.act.open_folder", ex);
+        }
+    }
+
+    private static void RevealFile(string path)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            StartProcess(new ProcessStartInfo("explorer.exe") { UseShellExecute = false, Arguments = $"/select,\"{path}\"" });
+        }
+        else if (OperatingSystem.IsMacOS())
+        {
+            var info = new ProcessStartInfo("open") { UseShellExecute = false };
+            info.ArgumentList.Add("-R");
+            info.ArgumentList.Add(path);
+            StartProcess(info);
+        }
+        else
+        {
+            OpenFolder(Path.GetDirectoryName(path) ?? string.Empty);
+        }
+    }
+
+    private static void OpenFolder(string folder)
+    {
+        if (string.IsNullOrEmpty(folder))
+            return;
+
+        var program = OperatingSystem.IsWindows() ? "explorer.exe"
+            : OperatingSystem.IsMacOS() ? "open"
+            : "xdg-open";
+        var info = new ProcessStartInfo(program) { UseShellExecute = false };
+        info.ArgumentList.Add(folder);
+        StartProcess(info);
+    }
+
+    private static void StartProcess(ProcessStartInfo info)
+    {
+        using var process = Process.Start(info);
     }
 
     // ---------------- Atualizações ----------------

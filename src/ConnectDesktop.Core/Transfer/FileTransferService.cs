@@ -1,4 +1,5 @@
 // Dono: g10. Assinaturas públicas FIXAS.
+using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Threading.Channels;
 using ConnectDesktop.Core.Net;
@@ -44,6 +45,8 @@ public sealed class FileTransferService : IDisposable
     private const int ProgressIntervalMs = 200;
     private const int MaxNameAttempts = 10000;
     private const int PartBufferSize = 81920;
+    private const int MaxFolderEntries = 100000;
+    private const long MaxFolderBytes = 50L * 1024 * 1024 * 1024;
     private static readonly TimeSpan ResultTimeout = TimeSpan.FromSeconds(60);
 
     private const string MsgConnectionLost = "Conexão perdida.";
@@ -73,6 +76,17 @@ public sealed class FileTransferService : IDisposable
         catch (Exception)
         {
             // Se não conseguir criar agora, o erro aparece na transferência ao receber o arquivo.
+        }
+        try
+        {
+            // Órfãos de execuções anteriores (envios de pasta interrompidos).
+            var sendRoot = Path.Combine(Path.GetTempPath(), "ConnectDesktop-Send");
+            if (Directory.Exists(sendRoot))
+                Directory.Delete(sendRoot, true);
+        }
+        catch (Exception)
+        {
+            // Melhor esforço.
         }
         _worker = Task.Run(() => RunQueueAsync());
     }
@@ -199,6 +213,49 @@ public sealed class FileTransferService : IDisposable
         return entry.Id;
     }
 
+    /// <summary>Sufixo do arquivo usado para enviar pastas: "&lt;pasta&gt;" + FolderArchiveSuffix.</summary>
+    public const string FolderArchiveSuffix = ".cdfolder.zip";
+
+    /// <summary>
+    /// v1.0.4: compacta a pasta (ZipFile, CompressionLevel.Fastest, incluindo a pasta raiz) num arquivo temporário
+    /// "&lt;nome da pasta&gt;.cdfolder.zip" em Path.GetTempPath()/ConnectDesktop-Send/, enfileira com SendFile e apaga o
+    /// temporário quando a transferência terminar (qualquer estado final). Retorna o Id.
+    /// Lança DirectoryNotFoundException / InvalidOperationException("Nenhum PC conectado.").
+    /// No RECEBIMENTO: um arquivo concluído cujo nome termina em FolderArchiveSuffix é extraído (ZipFile.ExtractToDirectory,
+    /// que já bloqueia caminhos fora do destino) para DownloadDir/&lt;nome sem o sufixo&gt; (nome livre: "x (1)" etc.),
+    /// o .zip é apagado e TransferInfo.LocalPath passa a ser a pasta extraída. Erro na extração → Failed("Erro ao extrair a pasta: {msg}").
+    /// Limite de segurança na extração: no máximo 100 000 entradas e 50 GB descompactados; acima disso → Failed.
+    /// </summary>
+    public Guid SendFolder(string path)
+    {
+        if (!Directory.Exists(path))
+            throw new DirectoryNotFoundException("Pasta não encontrada.");
+
+        var folderPath = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+        var folderName = Path.GetFileName(folderPath);
+        if (folderName.Length == 0)
+            folderName = "pasta";
+        var archiveName = folderName + FolderArchiveSuffix;
+
+        var batch = new Batch();
+        TransferEntry entry;
+        lock (_lock)
+        {
+            if (_disposed)
+                throw new ObjectDisposedException(nameof(FileTransferService));
+            if (_channel == null)
+                throw new InvalidOperationException(MsgNoChannel);
+
+            // Pending sem LocalPath até a compactação terminar; a compactação roda fora da chamada.
+            entry = new TransferEntry(Guid.NewGuid(), archiveName, 0, TransferDirection.Outgoing, null);
+            AddEntryLocked(entry);
+            batch.Notify.Add(entry.ToInfo());
+        }
+        Flush(batch);
+        _ = Task.Run(() => CompressFolderAsync(entry, folderPath, archiveName));
+        return entry.Id;
+    }
+
     /// <summary>Cancela (envio ou recebimento). Envia FileCancel ao outro lado. Ignora Id desconhecido.</summary>
     public void Cancel(Guid id)
     {
@@ -206,7 +263,7 @@ public sealed class FileTransferService : IDisposable
         lock (_lock)
         {
             var entry = FindLocked(id);
-            if (entry == null || !entry.IsActive)
+            if (entry == null || !entry.IsActive || entry.Extracting)
                 return;
 
             if (entry.Direction == TransferDirection.Incoming)
@@ -246,6 +303,12 @@ public sealed class FileTransferService : IDisposable
             ReleaseChannelLocked();
             _channel = null;
             FailActiveLocked(MsgConnectionLost, batch);
+            // Só o Dispose interrompe a extração; o .zip fica no destino.
+            foreach (var entry in _entries)
+            {
+                if (entry.Extracting && entry.IsActive)
+                    batch.ToCancel.Add(entry.Cts);
+            }
         }
         _queue.Writer.TryComplete();
         _shutdown.Cancel();
@@ -259,11 +322,19 @@ public sealed class FileTransferService : IDisposable
         try
         {
             await foreach (var entry in _queue.Reader.ReadAllAsync(_shutdown.Token))
+            {
                 await SendEntryAsync(entry);
+                DeleteTempFolder(entry);
+            }
         }
         catch (OperationCanceledException)
         {
             // Dispose: a fila termina.
+        }
+        finally
+        {
+            while (_queue.Reader.TryRead(out var left))
+                DeleteTempFolder(left);
         }
     }
 
@@ -433,6 +504,230 @@ public sealed class FileTransferService : IDisposable
         return total;
     }
 
+    /// <summary>Compacta a pasta num temporário e enfileira o .zip. Roda numa Task própria (não bloqueia o chamador).</summary>
+    private void CompressFolderAsync(TransferEntry entry, string folderPath, string archiveName)
+    {
+        try
+        {
+            var tempDir = Path.Combine(Path.GetTempPath(), "ConnectDesktop-Send", Guid.NewGuid().ToString("N"));
+            entry.TempDir = tempDir;
+            Directory.CreateDirectory(tempDir);
+            var zipPath = Path.Combine(tempDir, archiveName);
+            ZipFile.CreateFromDirectory(folderPath, zipPath, CompressionLevel.Fastest, includeBaseDirectory: true);
+            var size = new FileInfo(zipPath).Length;
+
+            var batch = new Batch();
+            var ready = false;
+            lock (_lock)
+            {
+                if (entry.State == TransferState.Pending)
+                {
+                    entry.LocalPath = zipPath;
+                    entry.Size = size;
+                    batch.Notify.Add(entry.ToInfo());
+                    ready = true;
+                }
+            }
+            Flush(batch);
+            if (ready && _queue.Writer.TryWrite(entry))
+                return;
+            DeleteTempFolder(entry);
+        }
+        catch (Exception ex)
+        {
+            FailOutgoing(entry, $"Erro ao ler o arquivo: {ex.Message}", tellRemote: false);
+            DeleteTempFolder(entry);
+        }
+    }
+
+    private static void DeleteTempFolder(TransferEntry entry)
+    {
+        var dir = entry.TempDir;
+        entry.TempDir = null;
+        if (dir == null)
+            return;
+        try
+        {
+            Directory.Delete(dir, true);
+        }
+        catch (Exception)
+        {
+            // Melhor esforço: a pasta temporária some na próxima limpeza do sistema.
+        }
+    }
+
+    /// <summary>
+    /// Extrai o .zip recebido numa pasta de trabalho dentro do destino, confere os limites ANTES de extrair
+    /// (entradas e soma dos Length) e move a pasta para um nome livre. Sucesso: Completed com LocalPath = pasta e .zip apagado.
+    /// Erro: Failed("Erro ao extrair a pasta: ...") e o .zip fica. Cancelamento/queda: limpa a pasta de trabalho e o .zip.
+    /// </summary>
+    private void RunFolderExtraction(TransferEntry entry, string zipPath, string root, string baseName, CancellationToken ct)
+    {
+        var stagingDir = Path.Combine(root, "." + Guid.NewGuid().ToString("N") + ".extract");
+        try
+        {
+            using (var zip = ZipFile.OpenRead(zipPath))
+            {
+                if (zip.Entries.Count > MaxFolderEntries)
+                    throw new InvalidDataException("pasta com entradas demais.");
+                // Tamanhos declarados: conferidos ANTES de extrair (sem estouro, com checked).
+                long declared = 0;
+                foreach (var item in zip.Entries)
+                {
+                    if (item.Length < 0 || item.Length > MaxFolderBytes)
+                        throw new InvalidDataException("pasta grande demais.");
+                    declared = checked(declared + item.Length);
+                    if (declared > MaxFolderBytes)
+                        throw new InvalidDataException("pasta grande demais.");
+                }
+
+                Directory.CreateDirectory(stagingDir);
+                var stagingRoot = stagingDir + Path.DirectorySeparatorChar;
+                long written = 0;
+                foreach (var item in zip.Entries)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    var dest = Path.GetFullPath(Path.Combine(stagingRoot, item.FullName));
+                    if (!dest.StartsWith(stagingRoot, StringComparison.OrdinalIgnoreCase))
+                        throw new InvalidDataException($"entrada fora da pasta: {item.FullName}");
+
+                    if (item.FullName.EndsWith('/') || item.FullName.EndsWith('\\'))
+                    {
+                        Directory.CreateDirectory(dest);
+                    }
+                    else
+                    {
+                        Directory.CreateDirectory(Path.GetDirectoryName(dest)!);
+                        written = CopyEntry(item, dest, written, ct);
+                    }
+                }
+            }
+
+            ct.ThrowIfCancellationRequested();
+            // O remetente inclui a pasta raiz: se o zip tem uma única pasta no topo, ela vira o destino.
+            var children = Directory.GetFileSystemEntries(stagingDir);
+            var source = children.Length == 1 && Directory.Exists(children[0]) ? children[0] : stagingDir;
+            var target = PickFreeFolder(root, baseName);
+            Directory.Move(source, target);
+            if (source != stagingDir)
+                Directory.Delete(stagingDir);
+            try
+            {
+                File.Delete(zipPath);
+            }
+            catch (Exception)
+            {
+                // A pasta já está pronta; o .zip que sobrou não derruba a extração.
+            }
+
+            var batch = new Batch();
+            var keep = false;
+            lock (_lock)
+            {
+                if (entry.State == TransferState.InProgress)
+                {
+                    keep = true;
+                    entry.LocalPath = target;
+                    entry.FileName = Path.GetFileName(target);
+                    FinishLocked(entry, TransferState.Completed, null, batch);
+                }
+            }
+            if (!keep)
+            {
+                try
+                {
+                    Directory.Delete(target, true);
+                }
+                catch (Exception)
+                {
+                }
+            }
+            Flush(batch);
+        }
+        catch (OperationCanceledException)
+        {
+            // Só o Dispose chega aqui: limpa a pasta de trabalho e mantém o .zip no destino.
+            CleanupStaging(stagingDir);
+            var batch = new Batch();
+            lock (_lock)
+            {
+                if (entry.State == TransferState.InProgress)
+                    FinishLocked(entry, TransferState.Failed, "Erro ao extrair a pasta: extração interrompida.", batch);
+            }
+            Flush(batch);
+        }
+        catch (Exception ex)
+        {
+            CleanupStaging(stagingDir);
+            var batch = new Batch();
+            lock (_lock)
+            {
+                if (entry.State == TransferState.InProgress)
+                    FinishLocked(entry, TransferState.Failed, $"Erro ao extrair a pasta: {ex.Message}", batch);
+            }
+            Flush(batch);
+        }
+    }
+
+    /// <summary>
+    /// Copia uma entrada contando os bytes reais. Aborta se passar do Length declarado da entrada
+    /// (cabeçalho mentiroso) ou do limite total de 50 GB. Devolve o total acumulado.
+    /// </summary>
+    private static long CopyEntry(ZipArchiveEntry item, string dest, long written, CancellationToken ct)
+    {
+        using var src = item.Open();
+        using var dst = new FileStream(dest, FileMode.CreateNew, FileAccess.Write, FileShare.None, PartBufferSize);
+        var buffer = new byte[PartBufferSize];
+        long entryBytes = 0;
+        int n;
+        while ((n = src.Read(buffer, 0, buffer.Length)) > 0)
+        {
+            ct.ThrowIfCancellationRequested();
+            entryBytes = checked(entryBytes + n);
+            if (entryBytes > item.Length)
+                throw new InvalidDataException("pasta grande demais.");
+            written = checked(written + n);
+            if (written > MaxFolderBytes)
+                throw new InvalidDataException("pasta grande demais.");
+            dst.Write(buffer, 0, n);
+        }
+        return written;
+    }
+
+    private static void CleanupStaging(string stagingDir)
+    {
+        try
+        {
+            if (Directory.Exists(stagingDir))
+                Directory.Delete(stagingDir, true);
+        }
+        catch (Exception)
+        {
+        }
+    }
+
+    private static string PickFreeFolder(string root, string baseName)
+    {
+        for (var i = 0; i < MaxNameAttempts; i++)
+        {
+            var candidate = Path.Combine(root, i == 0 ? baseName : $"{baseName} ({i})");
+            if (!Directory.Exists(candidate) && !File.Exists(candidate))
+                return candidate;
+        }
+        throw new IOException("não há nome livre na pasta de destino.");
+    }
+
+    private static bool IsFolderArchive(string fileName) =>
+        fileName.EndsWith(FolderArchiveSuffix, StringComparison.OrdinalIgnoreCase);
+
+    private string DownloadRootLocked()
+    {
+        var root = Path.GetFullPath(DownloadDir);
+        if (!Path.EndsInDirectorySeparator(root))
+            root += Path.DirectorySeparatorChar;
+        return root;
+    }
+
     // ---- Recebimento (sempre sob o lock) ----
 
     private void HandleOfferLocked(FileOfferMessage m, Batch batch)
@@ -546,7 +841,25 @@ public sealed class FileTransferService : IDisposable
             File.Move(entry.PartPath!, entry.LocalPath!, false);
             entry.PartPath = null;
 
-            FinishLocked(entry, TransferState.Completed, null, batch);
+            if (IsFolderArchive(entry.FileName))
+            {
+                // Pasta: o .zip chegou íntegro. O remetente é avisado já agora; a extração roda em segundo plano
+                // e só muda o estado local (Completed com a pasta, ou Failed).
+                var zipPath = entry.LocalPath!;
+                var root = DownloadRootLocked();
+                var baseName = entry.FileName[..^FolderArchiveSuffix.Length];
+                if (baseName.Length == 0)
+                    baseName = "pasta";
+                var token = entry.Cts.Token;
+                entry.Extracting = true;
+                entry.LastNotifiedUtc = DateTime.UtcNow;
+                batch.Notify.Add(entry.ToInfo());
+                batch.Start.Add(() => RunFolderExtraction(entry, zipPath, root, baseName, token));
+            }
+            else
+            {
+                FinishLocked(entry, TransferState.Completed, null, batch);
+            }
             if (_channel != null)
                 batch.Sends.Add((_channel, new FileResultMessage(entry.Id, true, string.Empty)));
         }
@@ -559,7 +872,7 @@ public sealed class FileTransferService : IDisposable
     private void HandleRemoteCancelLocked(FileCancelMessage m, Batch batch)
     {
         var entry = FindLocked(m.TransferId);
-        if (entry == null || !entry.IsActive)
+        if (entry == null || !entry.IsActive || entry.Extracting)
             return;
 
         if (entry.Direction == TransferDirection.Incoming)
@@ -625,7 +938,8 @@ public sealed class FileTransferService : IDisposable
     {
         foreach (var entry in _entries)
         {
-            if (!entry.IsActive)
+            // Extração de pasta em andamento: fase local, só o Dispose interrompe.
+            if (!entry.IsActive || entry.Extracting)
                 continue;
             if (entry.Direction == TransferDirection.Incoming)
                 entry.CloseAndDeletePart();
@@ -681,6 +995,7 @@ public sealed class FileTransferService : IDisposable
         public List<TransferInfo> Notify { get; } = new();
         public List<CancellationTokenSource> ToCancel { get; } = new();
         public List<(IMessageChannel Channel, Message Message)> Sends { get; } = new();
+        public List<Action> Start { get; } = new();
     }
 
     /// <summary>Chamar sempre fora do lock.</summary>
@@ -690,6 +1005,8 @@ public sealed class FileTransferService : IDisposable
             cts.Cancel();
         foreach (var (channel, message) in batch.Sends)
             _ = SendQuietlyAsync(channel, message);
+        foreach (var start in batch.Start)
+            _ = Task.Run(start);
         foreach (var info in batch.Notify)
             RaiseChanged(info);
     }

@@ -112,6 +112,9 @@ internal static class PtPages
         ["settings.appearance.apply"] = "Aplicar",
         ["settings.appearance.invalidHex"] = "Use o formato #RRGGBB.",
         ["settings.appearance.applied"] = "Cor aplicada.",
+        ["settings.navTitle"] = "Menu lateral",
+        ["settings.navHint"] = "Arraste os itens do menu para mudar a ordem.",
+        ["settings.navReset"] = "Restaurar ordem padrão",
 
         // Configurações > Idioma
         ["settings.language.title"] = "Idioma",

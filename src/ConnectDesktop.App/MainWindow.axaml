@@ -86,7 +86,7 @@
       <!-- Menu lateral -->
       <Border Grid.Column="0" Background="{DynamicResource SidebarBrush}">
         <Grid RowDefinitions="*,Auto">
-          <StackPanel Margin="14,20,14,0" Spacing="6">
+          <StackPanel x:Name="NavTop" Margin="14,20,14,0" Spacing="6">
             <Button x:Name="NavConnection" Classes="nav" Tag="connection" Click="OnNavClick">
               <StackPanel Orientation="Horizontal" Spacing="16">
                 <Path Classes="icon" Data="{StaticResource IconHome}" />

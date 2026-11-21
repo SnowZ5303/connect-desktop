@@ -11,6 +11,7 @@ Feito em .NET 8 com Avalonia. Funciona no Windows, macOS e Linux (sessão Xorg).
 - Mouse e teclado do PC principal controlando o secundário, pela borda da tela (esquerda, direita, acima ou abaixo).
 - Área de transferência compartilhada (texto).
 - **Transferência de arquivos** nos dois sentidos: arraste para a janela ou use "Enviar arquivos…". Eles chegam em `Downloads/Connect Desktop`, com verificação de integridade (SHA-256).
+- **Arrastar para o outro PC** (Windows): arraste arquivos, pastas, links ou texto até a borda do lado do outro PC e solte na faixa que aparece. Arquivos chegam em `Downloads/Connect Desktop` e o Explorer abre com eles selecionados; links abrem no navegador do outro PC; texto vai para a área de transferência dele.
 - Conexão cifrada (ECDH + AES-GCM) e pareamento por código de 6 dígitos.
 - Interface em **português, inglês e espanhol**, tema claro/escuro e cor de destaque.
 - Abrir com o sistema (opcionalmente minimizado na bandeja) e atualização automática pelo GitHub Releases.

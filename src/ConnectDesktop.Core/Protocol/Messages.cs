@@ -21,6 +21,9 @@ public enum MessageType : byte
     FileDone = 72,       // remetente -> destinatário: terminou; traz o SHA-256 do arquivo inteiro
     FileCancel = 73,     // qualquer lado: cancela a transferência
     FileResult = 74,     // destinatário -> remetente: resultado final (ok ou erro)
+    // v1.0.4+ (só enviar se IMessageChannel.RemoteVersion >= 1.0.4)
+    OpenUrl = 80,        // qualquer lado: abra este link no navegador padrão
+    DropBatch = 81,      // qualquer lado: os arquivos destes Ids foram ARRASTADOS; ao terminar todos, mostre-os (Explorer/Finder)
 }
 
 /// <summary>Mensagem de aplicação, trafega dentro do <see cref="Net.IMessageChannel"/>.</summary>
@@ -58,6 +61,26 @@ public sealed record FileDoneMessage(Guid TransferId, byte[] Sha256) : Message(M
 public sealed record FileCancelMessage(Guid TransferId, string Reason) : Message(MessageType.FileCancel);
 /// <summary>Error vazio quando Ok = true.</summary>
 public sealed record FileResultMessage(Guid TransferId, bool Ok, string Error) : Message(MessageType.FileResult);
+
+// ---- v1.0.4 ----
+/// <summary>Url absoluta http, https ou mailto (o receptor valida de novo antes de abrir). Codec: string.</summary>
+public sealed record OpenUrlMessage(string Url) : Message(MessageType.OpenUrl);
+/// <summary>Codec: int32 quantidade (0..1000) + Guids de 16 bytes.</summary>
+public sealed record DropBatchMessage(Guid[] TransferIds) : Message(MessageType.DropBatch);
+
+/// <summary>Versão mínima do outro lado para enviar OpenUrl/DropBatch.</summary>
+public static class ProtocolFeatures
+{
+    public static readonly Version DragAndDrop = new(1, 0, 4);
+
+    /// <summary>true se <paramref name="remoteVersion"/> ("1.0.4", "1.0.4+abc", "" = desconhecida/antiga) for &gt;= <paramref name="minimum"/>.</summary>
+    public static bool Supports(string? remoteVersion, Version minimum)
+    {
+        if (string.IsNullOrWhiteSpace(remoteVersion)) return false;
+        var core = remoteVersion.Split('+', '-')[0];
+        return Version.TryParse(core, out var v) && new Version(v.Major, v.Minor, Math.Max(0, v.Build)) >= minimum;
+    }
+}
 
 public static class FileTransferLimits
 {

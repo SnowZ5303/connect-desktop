@@ -9,6 +9,8 @@ public interface IMessageChannel : IAsyncDisposable
     /// <summary>Id e nome do outro PC (vindos do handshake).</summary>
     string RemoteDeviceId { get; }
     string RemoteDeviceName { get; }
+    /// <summary>Versão do app do outro lado (campo "version" do hello). "" se o outro lado for antigo (&lt; 1.0.4) e não informar.</summary>
+    string RemoteVersion { get; }
 
     /// <summary>Thread-safe: pode ser chamado de várias threads ao mesmo tempo.</summary>
     Task SendAsync(Message message, CancellationToken ct = default);
@@ -21,7 +23,8 @@ public interface IMessageChannel : IAsyncDisposable
 }
 
 /// <summary>Identidade deste PC. Id = Guid "N" fixo salvo nas configurações.</summary>
-public sealed record DeviceIdentity(string Id, string Name);
+/// <summary>Version = versão do app ("1.0.4"), enviada no hello (campo JSON "version"; versões antigas ignoram o campo).</summary>
+public sealed record DeviceIdentity(string Id, string Name, string Version = "");
 
 public enum DeviceRole { Primary, Secondary }
 

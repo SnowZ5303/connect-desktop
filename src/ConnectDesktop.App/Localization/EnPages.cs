@@ -112,6 +112,9 @@ internal static class EnPages
         ["settings.appearance.apply"] = "Apply",
         ["settings.appearance.invalidHex"] = "Use the #RRGGBB format.",
         ["settings.appearance.applied"] = "Color applied.",
+        ["settings.navTitle"] = "Side menu",
+        ["settings.navHint"] = "Drag the menu items to change their order.",
+        ["settings.navReset"] = "Restore default order",
 
         // Configurações > Idioma
         ["settings.language.title"] = "Language",

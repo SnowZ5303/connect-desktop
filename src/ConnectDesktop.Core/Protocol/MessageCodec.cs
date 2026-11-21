@@ -18,6 +18,11 @@ public static class MessageCodec
     /// <summary>Tamanho máximo de uma mensagem serializada (texto de clipboard incluso).</summary>
     public const int MaxMessageSize = 1024 * 1024;
 
+    /// <summary>Limite do OpenUrl em bytes UTF-8 (8 KB).</summary>
+    private const int MaxUrlBytes = 8 * 1024;
+    /// <summary>Limite de Guids por DropBatch.</summary>
+    private const int MaxDropBatchCount = 1000;
+
     private const int MaxMouseButtonValue = (int)MouseButton.X2;
     private const int MaxScreenSideValue = (int)ScreenSide.Bottom;
 
@@ -125,6 +130,26 @@ public static class MessageCodec
                     error.CopyTo(payload, 21);
                     break;
                 }
+            case OpenUrlMessage m:
+                {
+                    var url = Encoding.UTF8.GetBytes(m.Url);
+                    if (url.Length > MaxUrlBytes)
+                        throw new ArgumentException("Link grande demais.", nameof(message));
+                    payload = new byte[4 + url.Length];
+                    BinaryPrimitives.WriteInt32LittleEndian(payload.AsSpan(0), url.Length);
+                    url.CopyTo(payload, 4);
+                    break;
+                }
+            case DropBatchMessage m:
+                {
+                    if (m.TransferIds.Length > MaxDropBatchCount)
+                        throw new ArgumentException("Lote de arrastar grande demais.", nameof(message));
+                    payload = new byte[4 + 16 * m.TransferIds.Length];
+                    BinaryPrimitives.WriteInt32LittleEndian(payload.AsSpan(0), m.TransferIds.Length);
+                    for (var i = 0; i < m.TransferIds.Length; i++)
+                        m.TransferIds[i].TryWriteBytes(payload.AsSpan(4 + 16 * i, 16));
+                    break;
+                }
             default:
                 throw new ArgumentException("Tipo de mensagem desconhecido.", nameof(message));
         }
@@ -195,6 +220,10 @@ public static class MessageCodec
                 return DecodeFileCancel(p);
             case MessageType.FileResult:
                 return DecodeFileResult(p);
+            case MessageType.OpenUrl:
+                return DecodeOpenUrl(p);
+            case MessageType.DropBatch:
+                return DecodeDropBatch(p);
             default:
                 throw new FormatException($"Tipo de mensagem desconhecido: {type}.");
         }
@@ -272,6 +301,25 @@ public static class MessageCodec
         var error = ReadString(ref p);
         ExpectEnd(p, MessageType.FileResult);
         return new FileResultMessage(id, ok, error);
+    }
+
+    private static Message DecodeOpenUrl(ReadOnlySpan<byte> p)
+    {
+        var url = ReadString(ref p, MaxUrlBytes);
+        ExpectEnd(p, MessageType.OpenUrl);
+        return new OpenUrlMessage(url);
+    }
+
+    private static Message DecodeDropBatch(ReadOnlySpan<byte> p)
+    {
+        var count = ReadInt32(ref p);
+        if (count < 0 || count > MaxDropBatchCount)
+            throw new FormatException($"Quantidade de arquivos inválida no DropBatch: {count}.");
+        var ids = new Guid[count];
+        for (var i = 0; i < count; i++)
+            ids[i] = ReadGuid(ref p);
+        ExpectEnd(p, MessageType.DropBatch);
+        return new DropBatchMessage(ids);
     }
 
     private static void ExpectEnd(ReadOnlySpan<byte> rest, MessageType type)

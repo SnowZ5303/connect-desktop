@@ -1,5 +1,7 @@
+using System.Collections.Concurrent;
 using ConnectDesktop.Core.Layout;
 using ConnectDesktop.Core.Platform;
+using ConnectDesktop.Core.Protocol;
 using ConnectDesktop.Core.Session;
 using ConnectDesktop.Core.Tests.Fakes;
 using ConnectDesktop.Core.Transfer;
@@ -314,5 +316,57 @@ public sealed class SessionTests
         await pair.B.DisposeAsync();
         await Wait.Until(() => !filesSecondary.IsConnected, what: "IsConnected do secundário virou false");
         await Wait.Until(() => !filesPrimary.IsConnected, what: "IsConnected do principal virou false");
+    }
+
+    [Fact]
+    public async Task AppMessage_dispara_para_OpenUrl_e_DropBatch_nos_dois_sentidos()
+    {
+        await using var pair = new FakeChannelPair();
+        await using var primary = new PrimarySession(pair.A, new FakeCapture(), new FakeScreen(), ScreenSide.Right, null);
+        await using var secondary = new SecondarySession(pair.B, new FakeInjector(), new FakeScreen(), null);
+
+        var atPrimary = new ConcurrentQueue<Message>();
+        var atSecondary = new ConcurrentQueue<Message>();
+        primary.AppMessage += atPrimary.Enqueue;
+        secondary.AppMessage += atSecondary.Enqueue;
+
+        secondary.Start();
+        primary.Start();
+
+        // Secundário -> principal.
+        var batch = new DropBatchMessage(new[] { Guid.NewGuid(), Guid.NewGuid() });
+        await pair.B.SendAsync(new OpenUrlMessage("https://exemplo.com/ação"));
+        await pair.B.SendAsync(batch);
+        // O AppMessage é despachado em outra tarefa: a ordem não é garantida, então confere o conteúdo.
+        await Wait.Until(() => atPrimary.Count == 2, what: "duas mensagens de app no principal");
+        Assert.Contains(new OpenUrlMessage("https://exemplo.com/ação"), atPrimary);
+        Assert.Equal(batch.TransferIds, atPrimary.OfType<DropBatchMessage>().Single().TransferIds);
+
+        // Principal -> secundário.
+        var back = new DropBatchMessage(new[] { Guid.NewGuid() });
+        await pair.A.SendAsync(new OpenUrlMessage("mailto:pessoa@exemplo.com"));
+        await pair.A.SendAsync(back);
+        await Wait.Until(() => atSecondary.Count == 2, what: "duas mensagens de app no secundário");
+        Assert.Contains(new OpenUrlMessage("mailto:pessoa@exemplo.com"), atSecondary);
+        Assert.Equal(back.TransferIds, atSecondary.OfType<DropBatchMessage>().Single().TransferIds);
+    }
+
+    [Fact]
+    public async Task Botao_pressionado_na_borda_nao_entra_em_Remote_ate_soltar()
+    {
+        await using var rig = new Rig();
+        await rig.StartAndWaitReadyAsync();
+
+        // Botão esquerdo preso: encostar na borda não pode trocar de tela.
+        rig.Capture.Button(MouseButton.Left, true);
+        rig.Capture.Move(1919, 500, 5, 0);
+        Assert.Equal(PrimaryState.Local, rig.Primary.State);
+        Assert.False(rig.Capture.SuppressLocalInput);
+
+        // Soltou o botão: a mesma encostada agora entra em Remote.
+        rig.Capture.Button(MouseButton.Left, false);
+        rig.Capture.Move(1919, 500, 5, 0);
+        await Wait.Until(() => rig.Primary.State == PrimaryState.Remote, what: "principal entrou em Remote");
+        Assert.True(rig.Capture.SuppressLocalInput);
     }
 }

@@ -21,6 +21,7 @@ public sealed class DelayedChannel : IMessageChannel
 
     public string RemoteDeviceId => _inner.RemoteDeviceId;
     public string RemoteDeviceName => _inner.RemoteDeviceName;
+    public string RemoteVersion => _inner.RemoteVersion;
 
     public event Action? Closed
     {

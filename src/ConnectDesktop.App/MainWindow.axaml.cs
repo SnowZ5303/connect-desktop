@@ -41,6 +41,13 @@ public partial class MainWindow : Window
     private string? _warning;
     private bool _warningIsError;
 
+    /// <summary>Quanto (px) o item do menu precisa andar para virar arrasto; menos que isso é clique.</summary>
+    private const double NavDragThreshold = 6;
+    private Button? _navPressedButton;
+    private Point _navPressStart;
+    private bool _navDragging;
+    private bool _navSuppressClick;
+
     /// <summary>Construtor usado pelo carregador de XAML. O controlador vem de <see cref="App.Controller"/>.</summary>
     public MainWindow() : this(App.Controller ?? throw new InvalidOperationException("O controlador do aplicativo não foi criado."))
     {
@@ -64,6 +71,7 @@ public partial class MainWindow : Window
 
         BuildSwatches();
         BuildLanguages();
+        AttachNavDrag();
 
         _connectionView = new ConnectionView(_controller);
         _connectionView.NavigateRequested += ShowPage;
@@ -127,6 +135,9 @@ public partial class MainWindow : Window
     private void RefreshShell()
     {
         VersionText.Text = Loc.Instance.Format("app.version", _controller.AppVersion);
+        // Durante um arrasto a ordem visual é a do arrasto; a salva entra no fim do arrasto.
+        if (!_navDragging)
+            ApplyNavOrder(_controller.NavOrder);
         RefreshStatusPill();
         RefreshModeButtons();
         RefreshSwatches();
@@ -365,8 +376,147 @@ public partial class MainWindow : Window
 
     private void OnNavClick(object? sender, RoutedEventArgs e)
     {
+        // O soltar de um arrasto não pode navegar.
+        if (_navSuppressClick)
+        {
+            _navSuppressClick = false;
+            return;
+        }
+
         if (sender is Button { Tag: string key })
             ShowPage(key);
+    }
+
+    // ---------------- Menu reordenável ----------------
+
+    /// <summary>Conexão, Dispositivos, Transferências e Pares salvos podem trocar de lugar entre si (Configurações e Sobre ficam fixos).</summary>
+    private void AttachNavDrag()
+    {
+        foreach (var button in new[] { NavConnection, NavDevices, NavTransfers, NavPairs })
+        {
+            button.AddHandler(PointerPressedEvent, OnNavPointerPressed, RoutingStrategies.Tunnel);
+            button.AddHandler(PointerMovedEvent, OnNavPointerMoved, RoutingStrategies.Tunnel);
+            button.AddHandler(PointerReleasedEvent, OnNavPointerReleased, RoutingStrategies.Tunnel);
+            button.PointerCaptureLost += OnNavCaptureLost;
+        }
+    }
+
+    private void OnNavPointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        _navSuppressClick = false;
+        if (sender is not Button button || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+            return;
+
+        _navPressedButton = button;
+        _navPressStart = e.GetPosition(NavTop);
+        _navDragging = false;
+    }
+
+    private void OnNavPointerMoved(object? sender, PointerEventArgs e)
+    {
+        var button = _navPressedButton;
+        if (button is null || !ReferenceEquals(sender, button))
+            return;
+
+        var point = e.GetPosition(NavTop);
+        if (!_navDragging)
+        {
+            var dx = Math.Abs(point.X - _navPressStart.X);
+            var dy = Math.Abs(point.Y - _navPressStart.Y);
+            if (Math.Max(dx, dy) <= NavDragThreshold)
+                return;
+
+            _navDragging = true;
+            button.Opacity = 0.7;
+        }
+
+        MoveNavItem(button, point.Y);
+    }
+
+    private void OnNavPointerReleased(object? sender, PointerReleasedEventArgs e)
+    {
+        if (_navPressedButton is null || !ReferenceEquals(sender, _navPressedButton))
+            return;
+
+        FinishNavPress();
+    }
+
+    private void OnNavCaptureLost(object? sender, PointerCaptureLostEventArgs e)
+        => FinishNavPress();
+
+    /// <summary>Fim do toque. Se houve arrasto, grava a nova ordem e impede o clique que o soltar geraria.</summary>
+    private void FinishNavPress()
+    {
+        var button = _navPressedButton;
+        if (button is null)
+            return;
+
+        var dragged = _navDragging;
+        _navPressedButton = null;
+        _navDragging = false;
+        button.Opacity = 1;
+
+        if (dragged)
+        {
+            _navSuppressClick = true;
+            _controller.SetNavOrder(CurrentNavOrder());
+        }
+    }
+
+    /// <summary>
+    /// Troca de lugar com o vizinho quando o ponteiro passa da metade dele. O vizinho é que muda de posição,
+    /// e o item arrastado fica no lugar na árvore (assim não perde a captura do ponteiro).
+    /// </summary>
+    private void MoveNavItem(Button button, double y)
+    {
+        var index = NavTop.Children.IndexOf(button);
+        if (index < 0)
+            return;
+
+        if (NavItemAt(index + 1) is { } below && y > below.Bounds.Top + below.Bounds.Height / 2)
+        {
+            NavTop.Children.RemoveAt(index + 1);
+            NavTop.Children.Insert(index, below);
+        }
+        else if (NavItemAt(index - 1) is { } above && y < above.Bounds.Top + above.Bounds.Height / 2)
+        {
+            NavTop.Children.RemoveAt(index - 1);
+            NavTop.Children.Insert(index, above);
+        }
+    }
+
+    /// <summary>Item de topo do menu na posição dada (null se a posição não for um item reordenável).</summary>
+    private Button? NavItemAt(int index)
+    {
+        if (index < 0 || index >= NavTop.Children.Count)
+            return null;
+
+        return NavTop.Children[index] is Button { Tag: string id } button && AppController.DefaultNavOrder.Contains(id)
+            ? button
+            : null;
+    }
+
+    /// <summary>Ids dos itens de topo, na ordem em que estão na tela.</summary>
+    private List<string> CurrentNavOrder()
+        => NavTop.Children.OfType<Button>()
+            .Select(b => b.Tag as string)
+            .OfType<string>()
+            .Where(id => AppController.DefaultNavOrder.Contains(id))
+            .ToList();
+
+    /// <summary>Põe os itens de topo na ordem dada. Os demais itens do menu não mudam de lugar.</summary>
+    private void ApplyNavOrder(IReadOnlyList<string> order)
+    {
+        for (var i = 0; i < order.Count; i++)
+        {
+            var button = _navButtons[order[i]];
+            var current = NavTop.Children.IndexOf(button);
+            if (current < 0 || current == i)
+                continue;
+
+            NavTop.Children.RemoveAt(current);
+            NavTop.Children.Insert(i, button);
+        }
     }
 
     private void OnSettingsToggleClick(object? sender, RoutedEventArgs e)

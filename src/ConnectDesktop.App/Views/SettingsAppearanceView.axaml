@@ -94,6 +94,19 @@
         </StackPanel>
       </Border>
 
+      <!-- Menu lateral -->
+      <Border Classes="card">
+        <StackPanel Spacing="12">
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <Path Classes="icon accent" Data="{StaticResource IconMonitor}" VerticalAlignment="Center" />
+            <TextBlock Text="{s:Tr settings.navTitle}" Classes="title" VerticalAlignment="Center" />
+          </StackPanel>
+          <TextBlock Text="{s:Tr settings.navHint}" TextWrapping="Wrap" Classes="muted" />
+          <Button x:Name="ResetNavButton" Classes="primary" HorizontalAlignment="Left"
+                  Content="{s:Tr settings.navReset}" />
+        </StackPanel>
+      </Border>
+
     </StackPanel>
   </ScrollViewer>
 </UserControl>

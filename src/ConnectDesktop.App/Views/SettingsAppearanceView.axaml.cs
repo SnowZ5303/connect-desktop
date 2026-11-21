@@ -33,6 +33,7 @@ public partial class SettingsAppearanceView : UserControl
 
         HexBox.TextChanged += (_, _) => OnHexTyped();
         ApplyHexButton.Click += (_, _) => ApplyHex();
+        ResetNavButton.Click += (_, _) => App.Controller?.ResetNavOrder();
 
         AttachedToVisualTree += (_, _) => Subscribe();
         DetachedFromVisualTree += (_, _) => Unsubscribe();
