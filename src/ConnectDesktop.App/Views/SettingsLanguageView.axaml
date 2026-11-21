@@ -1,0 +1,59 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:s="using:ConnectDesktop.App.Services"
+             x:Class="ConnectDesktop.App.Views.SettingsLanguageView">
+  <UserControl.Styles>
+    <Style Selector="Button.langItem">
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="Padding" Value="12,10" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+      <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+    </Style>
+    <Style Selector="Button.langItem.selected">
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+    </Style>
+    <Style Selector="Border.badge">
+      <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Padding" Value="8,4" />
+      <Setter Property="MinWidth" Value="64" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBlock.badge">
+      <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="HorizontalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBlock.rowTitle">
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    </Style>
+  </UserControl.Styles>
+
+  <ScrollViewer>
+    <StackPanel Spacing="16" Margin="0,0,8,0">
+
+      <StackPanel Spacing="4">
+        <TextBlock Text="{s:Tr settings.language.title}" FontSize="24" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
+        <TextBlock Text="{s:Tr settings.language.subtitle}" Foreground="{DynamicResource TextSecondaryBrush}" />
+      </StackPanel>
+
+      <Border Classes="card">
+        <StackPanel Spacing="12">
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <Path Classes="icon accent" Data="{StaticResource IconGlobe}" VerticalAlignment="Center" />
+            <TextBlock Text="{s:Tr settings.language.choose}" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
+          </StackPanel>
+          <!-- Itens (idioma do sistema + Loc.Languages) são criados em código -->
+          <StackPanel x:Name="LanguageList" Spacing="8" />
+        </StackPanel>
+      </Border>
+
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

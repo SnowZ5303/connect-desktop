@@ -1,0 +1,42 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:s="using:ConnectDesktop.App.Services"
+             x:Class="ConnectDesktop.App.Views.SettingsStartupView">
+  <UserControl.Styles>
+  </UserControl.Styles>
+
+  <ScrollViewer>
+    <StackPanel Spacing="16" Margin="0,0,8,0">
+
+      <StackPanel Spacing="4">
+        <TextBlock Text="{s:Tr settings.startup.title}" FontSize="24" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
+        <TextBlock Text="{s:Tr settings.startup.subtitle}" Foreground="{DynamicResource TextSecondaryBrush}" />
+      </StackPanel>
+
+      <Border Classes="card">
+        <StackPanel Spacing="18">
+
+          <Grid ColumnDefinitions="*,Auto">
+            <StackPanel Grid.Column="0" Spacing="4" Margin="0,0,16,0">
+              <TextBlock Text="{s:Tr settings.startup.withSystem}" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
+              <TextBlock Text="{s:Tr settings.startup.withSystemHint}" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}" />
+            </StackPanel>
+            <ToggleSwitch x:Name="StartWithSystemToggle" Grid.Column="1" VerticalAlignment="Center" />
+          </Grid>
+
+          <Border Height="1" Background="{DynamicResource DividerBrush}" />
+
+          <Grid ColumnDefinitions="*,Auto">
+            <StackPanel Grid.Column="0" Spacing="4" Margin="0,0,16,0">
+              <TextBlock Text="{s:Tr settings.startup.minimized}" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
+              <TextBlock Text="{s:Tr settings.startup.minimizedHint}" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}" />
+            </StackPanel>
+            <ToggleSwitch x:Name="StartMinimizedToggle" Grid.Column="1" VerticalAlignment="Center" />
+          </Grid>
+
+        </StackPanel>
+      </Border>
+
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

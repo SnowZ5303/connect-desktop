@@ -1,123 +1,234 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:s="using:ConnectDesktop.App.Services"
         x:Class="ConnectDesktop.App.MainWindow"
-        Title="Connect Desktop"
-        Width="520" Height="620"
-        MinWidth="520" MinHeight="620"
+        Title="{s:Tr app.title}"
+        Width="1000" Height="1000"
+        MinWidth="860" MinHeight="720"
         WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource AppBackgroundBrush}"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaChromeHints="NoChrome"
+        ExtendClientAreaTitleBarHeightHint="-1"
         Closing="OnWindowClosing">
   <Window.Styles>
-    <Style Selector="Button.side.selected">
-      <Setter Property="Background" Value="#2563EB" />
-      <Setter Property="Foreground" Value="White" />
+    <Style Selector="Button.nav.selected Path.icon">
+      <Setter Property="Stroke" Value="White" />
+    </Style>
+    <Style Selector="Button.seg.selected Path.icon">
+      <Setter Property="Stroke" Value="White" />
+    </Style>
+    <Style Selector="Button.nav.sub.selected Path.icon">
+      <Setter Property="Stroke" Value="{DynamicResource AccentBrush}" />
+    </Style>
+    <Style Selector="Border.navsep">
+      <Setter Property="Height" Value="1" />
+      <Setter Property="Background" Value="{DynamicResource DividerBrush}" />
+      <Setter Property="Margin" Value="12,8" />
+    </Style>
+    <Style Selector="Border.seggroup">
+      <Setter Property="Background" Value="{DynamicResource InputBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="12" />
+      <Setter Property="Padding" Value="3" />
+    </Style>
+    <Style Selector="Ellipse.dot">
+      <Setter Property="Width" Value="10" />
+      <Setter Property="Height" Value="10" />
+      <Setter Property="Fill" Value="{DynamicResource StatusWaitBrush}" />
+    </Style>
+    <Style Selector="Ellipse.dot.ok">
+      <Setter Property="Fill" Value="{DynamicResource StatusOkBrush}" />
+    </Style>
+    <Style Selector="Ellipse.dot.error">
+      <Setter Property="Fill" Value="{DynamicResource StatusErrorBrush}" />
     </Style>
   </Window.Styles>
 
-  <DockPanel Margin="20">
+  <Grid RowDefinitions="Auto,*,Auto">
 
-    <!-- Rodapé -->
-    <StackPanel DockPanel.Dock="Bottom" Spacing="8">
-      <CheckBox x:Name="ClipboardCheck" Content="Compartilhar área de transferência"
-                Checked="OnOptionToggled" Unchecked="OnOptionToggled" />
-      <CheckBox x:Name="UpdatesCheck" Content="Procurar atualizações ao abrir"
-                Checked="OnOptionToggled" Unchecked="OnOptionToggled" />
-      <StackPanel Orientation="Horizontal" Spacing="8">
-        <Button x:Name="CheckUpdatesButton" Content="Verificar atualizações" Click="OnCheckUpdatesClick" />
-        <Button x:Name="PairsToggleButton" Content="Pares salvos" Click="OnPairsToggleClick" />
-      </StackPanel>
-      <TextBlock x:Name="UpdateInfoText" TextWrapping="Wrap" Opacity="0.8" />
-      <StackPanel x:Name="PairsPanel" IsVisible="False" Spacing="6">
-        <ListBox x:Name="PairsList" Height="110" />
-        <TextBlock x:Name="PairsEmptyText" Text="Nenhum PC pareado." Opacity="0.7" />
-        <Button Content="Esquecer pareamento selecionado" Click="OnForgetPairClick" />
-      </StackPanel>
-    </StackPanel>
-
-    <!-- Conteúdo -->
-    <ScrollViewer>
-      <StackPanel Spacing="14" Margin="0,0,8,0">
-
-        <StackPanel Spacing="2">
-          <TextBlock Text="Connect Desktop" FontSize="24" FontWeight="SemiBold" />
-          <TextBlock x:Name="VersionText" Opacity="0.7" />
+    <!-- Barra de título própria: logo, nome, versão e botões da janela -->
+    <Border Grid.Row="0" x:Name="TitleBar" Height="48" Background="{DynamicResource AppBackgroundBrush}"
+            PointerPressed="OnTitleBarPressed" DoubleTapped="OnTitleBarDoubleTapped">
+      <Grid ColumnDefinitions="Auto,Auto,Auto,*,Auto">
+        <Path Grid.Column="0" Data="{StaticResource IconLink}" Stretch="Uniform" Width="26" Height="26"
+              Margin="16,0,10,0" VerticalAlignment="Center"
+              StrokeThickness="2.4" StrokeLineCap="Round" StrokeJoin="Round">
+          <Path.Stroke>
+            <LinearGradientBrush StartPoint="0%,0%" EndPoint="100%,100%">
+              <GradientStop Offset="0" Color="{DynamicResource SystemAccentColorLight1}" />
+              <GradientStop Offset="1" Color="{DynamicResource SystemAccentColorDark1}" />
+            </LinearGradientBrush>
+          </Path.Stroke>
+        </Path>
+        <TextBlock Grid.Column="1" Text="{s:Tr app.title}" FontSize="15" FontWeight="SemiBold"
+                   VerticalAlignment="Center" Margin="0,0,12,0" />
+        <Border Grid.Column="2" Classes="pill" Padding="10,3" VerticalAlignment="Center">
+          <TextBlock x:Name="VersionText" Classes="muted" FontSize="12" />
+        </Border>
+        <StackPanel Grid.Column="4" Orientation="Horizontal">
+          <Button Classes="winbtn" ToolTip.Tip="{s:Tr shell.minimize}" Click="OnMinimizeClick">
+            <Path Classes="icon" Data="{StaticResource IconWinMinimize}" />
+          </Button>
+          <Button Classes="winbtn" ToolTip.Tip="{s:Tr shell.maximize}" Click="OnMaximizeClick">
+            <Path x:Name="MaximizeIcon" Classes="icon" Data="{StaticResource IconWinMaximize}" />
+          </Button>
+          <Button Classes="winbtn close" ToolTip.Tip="{s:Tr shell.close}" Click="OnCloseClick">
+            <Path Classes="icon" Data="{StaticResource IconWinClose}" />
+          </Button>
         </StackPanel>
+      </Grid>
+    </Border>
 
-        <Border x:Name="UpdateBanner" IsVisible="False" Padding="12" CornerRadius="6" Background="#E8F1FF">
-          <StackPanel Spacing="8">
-            <TextBlock x:Name="UpdateText" FontWeight="SemiBold" Foreground="#1F1F1F" TextWrapping="Wrap" />
-            <Button x:Name="UpdateButton" Content="Atualizar agora" Click="OnUpdateClick" HorizontalAlignment="Left" />
-            <ProgressBar x:Name="UpdateProgress" IsVisible="False" Minimum="0" Maximum="1" Height="6" />
+    <Grid Grid.Row="1" ColumnDefinitions="262,*">
+
+      <!-- Menu lateral -->
+      <Border Grid.Column="0" Background="{DynamicResource SidebarBrush}">
+        <Grid RowDefinitions="*,Auto">
+          <StackPanel Margin="14,20,14,0" Spacing="6">
+            <Button x:Name="NavConnection" Classes="nav" Tag="connection" Click="OnNavClick">
+              <StackPanel Orientation="Horizontal" Spacing="16">
+                <Path Classes="icon" Data="{StaticResource IconHome}" />
+                <TextBlock Text="{s:Tr nav.connection}" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+            <Button x:Name="NavDevices" Classes="nav" Tag="devices" Click="OnNavClick">
+              <StackPanel Orientation="Horizontal" Spacing="16">
+                <Path Classes="icon" Data="{StaticResource IconDevices}" />
+                <TextBlock Text="{s:Tr nav.devices}" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+            <Button x:Name="NavTransfers" Classes="nav" Tag="transfers" Click="OnNavClick">
+              <StackPanel Orientation="Horizontal" Spacing="16">
+                <Path Classes="icon" Data="{StaticResource IconDownload}" />
+                <TextBlock Text="{s:Tr nav.transfers}" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+            <Button x:Name="NavPairs" Classes="nav" Tag="pairs" Click="OnNavClick">
+              <StackPanel Orientation="Horizontal" Spacing="16">
+                <Path Classes="icon" Data="{StaticResource IconBookmark}" />
+                <TextBlock Text="{s:Tr nav.saved_pairs}" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+
+            <Border Classes="navsep" />
+
+            <Button x:Name="NavSettings" Classes="nav" Click="OnSettingsToggleClick">
+              <Grid ColumnDefinitions="Auto,*,Auto">
+                <Path Classes="icon" Data="{StaticResource IconSettings}" />
+                <TextBlock Grid.Column="1" Text="{s:Tr nav.settings}" VerticalAlignment="Center" Margin="16,0,0,0" />
+                <Path x:Name="SettingsChevron" Classes="icon" Data="{StaticResource IconChevronDown}"
+                      Width="18" Height="18" />
+              </Grid>
+            </Button>
+            <StackPanel x:Name="SettingsItems" Spacing="4" Margin="14,0,0,0" IsVisible="False">
+              <Button x:Name="NavGeneral" Classes="nav sub" Tag="general" Click="OnNavClick">
+                <StackPanel Orientation="Horizontal" Spacing="14">
+                  <Path Classes="icon" Data="{StaticResource IconSettings}" Width="20" Height="20" />
+                  <TextBlock Text="{s:Tr nav.general}" VerticalAlignment="Center" />
+                </StackPanel>
+              </Button>
+              <Button x:Name="NavAppearance" Classes="nav sub" Tag="appearance" Click="OnNavClick">
+                <StackPanel Orientation="Horizontal" Spacing="14">
+                  <Path Classes="icon" Data="{StaticResource IconPalette}" Width="20" Height="20" />
+                  <TextBlock Text="{s:Tr nav.appearance}" VerticalAlignment="Center" />
+                </StackPanel>
+              </Button>
+              <Button x:Name="NavLanguage" Classes="nav sub" Tag="language" Click="OnNavClick">
+                <StackPanel Orientation="Horizontal" Spacing="14">
+                  <Path Classes="icon" Data="{StaticResource IconGlobe}" Width="20" Height="20" />
+                  <TextBlock Text="{s:Tr nav.language}" VerticalAlignment="Center" />
+                </StackPanel>
+              </Button>
+              <Button x:Name="NavStartup" Classes="nav sub" Tag="startup" Click="OnNavClick">
+                <StackPanel Orientation="Horizontal" Spacing="14">
+                  <Path Classes="icon" Data="{StaticResource IconPower}" Width="20" Height="20" />
+                  <TextBlock Text="{s:Tr nav.startup}" VerticalAlignment="Center" />
+                </StackPanel>
+              </Button>
+            </StackPanel>
+
+            <Border Classes="navsep" />
+
+            <Button x:Name="NavAbout" Classes="nav" Tag="about" Click="OnNavClick">
+              <StackPanel Orientation="Horizontal" Spacing="16">
+                <Path Classes="icon" Data="{StaticResource IconInfo}" />
+                <TextBlock Text="{s:Tr nav.about}" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
           </StackPanel>
-        </Border>
 
-        <Border x:Name="WarningBorder" IsVisible="False" Padding="12" CornerRadius="6" Background="#FDECEA">
-          <TextBlock x:Name="WarningText" TextWrapping="Wrap" Foreground="#1F1F1F" />
-        </Border>
+          <!-- Status do PC (pílula no rodapé do menu) -->
+          <Border x:Name="StatusPill" Grid.Row="1" Classes="pill" Margin="14,0,14,16" Padding="14,8">
+            <StackPanel Orientation="Horizontal" Spacing="10">
+              <Ellipse x:Name="StatusDot" Classes="dot" VerticalAlignment="Center" />
+              <TextBlock x:Name="StatusPillText" FontSize="13" VerticalAlignment="Center"
+                         TextWrapping="Wrap" MaxWidth="186" />
+            </StackPanel>
+          </Border>
+        </Grid>
+      </Border>
 
-        <StackPanel Spacing="6">
-          <TextBlock Text="Nome deste PC" FontWeight="SemiBold" />
-          <Grid ColumnDefinitions="*,Auto">
-            <TextBox x:Name="NameBox" Grid.Column="0" MaxLength="40" Margin="0,0,8,0" />
-            <Button x:Name="SaveNameButton" Grid.Column="1" Content="Salvar" Click="OnSaveNameClick" />
+      <!-- Conteúdo -->
+      <ContentControl Grid.Column="1" x:Name="ContentHost" Margin="6,8,10,8" />
+    </Grid>
+
+    <!-- Barra inferior: aparência, tema e idioma (rótulo em cima, controle embaixo) -->
+    <Border Grid.Row="2" Background="{DynamicResource AppBackgroundBrush}"
+            BorderBrush="{DynamicResource DividerBrush}" BorderThickness="0,1,0,0" Padding="20,12">
+      <Grid ColumnDefinitions="Auto,*,Auto,*,Auto" VerticalAlignment="Center">
+
+        <!-- Aparência -->
+        <StackPanel Grid.Column="0" Spacing="6" VerticalAlignment="Center">
+          <TextBlock Classes="muted" FontSize="13" Text="{s:Tr shell.appearance}" />
+          <Border Classes="seggroup">
+            <StackPanel Orientation="Horizontal" Spacing="2">
+              <Button x:Name="ModeSystem" Classes="seg" Tag="System" Width="100" Click="OnModeClick">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <Path Classes="icon" Data="{StaticResource IconMonitor}" Width="20" Height="20" />
+                  <TextBlock Text="{s:Tr shell.mode_system}" VerticalAlignment="Center" />
+                </StackPanel>
+              </Button>
+              <Button x:Name="ModeLight" Classes="seg" Tag="Light" Width="88" Click="OnModeClick">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <Path Classes="icon" Data="{StaticResource IconSun}" Width="20" Height="20" />
+                  <TextBlock Text="{s:Tr shell.mode_light}" VerticalAlignment="Center" />
+                </StackPanel>
+              </Button>
+              <Button x:Name="ModeDark" Classes="seg" Tag="Dark" Width="94" Click="OnModeClick">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                  <Path Classes="icon" Data="{StaticResource IconMoon}" Width="20" Height="20" />
+                  <TextBlock Text="{s:Tr shell.mode_dark}" VerticalAlignment="Center" />
+                </StackPanel>
+              </Button>
+            </StackPanel>
+          </Border>
+        </StackPanel>
+
+        <Border Grid.Column="1" Width="1" Height="60" Background="{DynamicResource DividerBrush}"
+                HorizontalAlignment="Center" VerticalAlignment="Center" />
+
+        <!-- Tema -->
+        <StackPanel Grid.Column="2" Spacing="6" VerticalAlignment="Center">
+          <TextBlock Classes="muted" FontSize="13" Text="{s:Tr shell.theme}" />
+          <StackPanel x:Name="ThemeSwatches" Orientation="Horizontal" Spacing="10" Height="34" VerticalAlignment="Center" />
+        </StackPanel>
+
+        <Border Grid.Column="3" Width="1" Height="60" Background="{DynamicResource DividerBrush}"
+                HorizontalAlignment="Center" VerticalAlignment="Center" />
+
+        <!-- Idioma -->
+        <StackPanel Grid.Column="4" Spacing="6" VerticalAlignment="Center">
+          <TextBlock Classes="muted" FontSize="13" Text="{s:Tr shell.language}" />
+          <Grid Width="220" Height="40">
+            <ComboBox x:Name="LanguageCombo" Width="220" Height="40" Padding="42,0,10,0"
+                      SelectionChanged="OnLanguageChanged" />
+            <Path Classes="icon" Data="{StaticResource IconGlobe}" IsHitTestVisible="False"
+                  HorizontalAlignment="Left" VerticalAlignment="Center" Margin="12,0,0,0" />
           </Grid>
         </StackPanel>
-
-        <StackPanel Spacing="6">
-          <TextBlock Text="Papel deste PC" FontWeight="SemiBold" />
-          <RadioButton x:Name="PrimaryRadio" GroupName="Papel"
-                       Content="Este é o PC principal (compartilha mouse e teclado)"
-                       Checked="OnRoleChecked" />
-          <RadioButton x:Name="SecondaryRadio" GroupName="Papel"
-                       Content="Este é o PC secundário (recebe mouse e teclado)"
-                       Checked="OnRoleChecked" />
-        </StackPanel>
-
-        <Border Padding="10" CornerRadius="6" BorderBrush="#9CA3AF" BorderThickness="1">
-          <TextBlock x:Name="StatusText" TextWrapping="Wrap" />
-        </Border>
-
-        <!-- Painel do PC principal -->
-        <StackPanel x:Name="PrimaryPanel" Spacing="12">
-          <TextBlock Text="PCs secundários na rede" FontWeight="SemiBold" />
-          <ListBox x:Name="PeersList" Height="130" />
-          <TextBlock x:Name="EmptyPeersText" TextWrapping="Wrap" Opacity="0.7"
-                     Text="Procurando PCs na rede… Abra o Connect Desktop no outro PC e escolha 'secundário'." />
-          <Button x:Name="ConnectButton" Content="Conectar" Click="OnConnectClick" HorizontalAlignment="Left" />
-
-          <TextBlock Text="Posição do PC secundário" FontWeight="SemiBold" Margin="0,8,0,0" />
-          <Grid ColumnDefinitions="*,*,*" RowDefinitions="*,*,*" Height="190">
-            <Button x:Name="TopButton" Grid.Row="0" Grid.Column="1" Classes="side" Tag="Top"
-                    Content="Acima" Margin="4" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
-                    Click="OnSideClick" />
-            <Button x:Name="LeftButton" Grid.Row="1" Grid.Column="0" Classes="side" Tag="Left"
-                    Content="Esquerda" Margin="4" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
-                    Click="OnSideClick" />
-            <Border Grid.Row="1" Grid.Column="1" Margin="4" CornerRadius="6"
-                    BorderBrush="#9CA3AF" BorderThickness="2">
-              <TextBlock Text="Este PC" FontWeight="SemiBold"
-                         HorizontalAlignment="Center" VerticalAlignment="Center" />
-            </Border>
-            <Button x:Name="RightButton" Grid.Row="1" Grid.Column="2" Classes="side" Tag="Right"
-                    Content="Direita" Margin="4" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
-                    Click="OnSideClick" />
-            <Button x:Name="BottomButton" Grid.Row="2" Grid.Column="1" Classes="side" Tag="Bottom"
-                    Content="Abaixo" Margin="4" HorizontalAlignment="Stretch" HorizontalContentAlignment="Center"
-                    Click="OnSideClick" />
-          </Grid>
-          <TextBlock Text="Para voltar o mouse a qualquer momento: Ctrl + Alt + Esc"
-                     TextWrapping="Wrap" Opacity="0.7" />
-        </StackPanel>
-
-        <!-- Painel do PC secundário -->
-        <StackPanel x:Name="SecondaryPanel" Spacing="8" IsVisible="False">
-          <TextBlock Text="Código de pareamento" FontWeight="SemiBold" />
-          <TextBlock x:Name="CodeText" Text="--- ---" FontSize="40" FontWeight="Bold"
-                     FontFamily="Consolas" HorizontalAlignment="Center" Margin="0,8,0,8" />
-          <TextBlock Text="Digite este código no PC principal para conectar."
-                     TextWrapping="Wrap" HorizontalAlignment="Center" Opacity="0.8" />
-        </StackPanel>
-
-      </StackPanel>
-    </ScrollViewer>
-  </DockPanel>
+      </Grid>
+    </Border>
+  </Grid>
 </Window>

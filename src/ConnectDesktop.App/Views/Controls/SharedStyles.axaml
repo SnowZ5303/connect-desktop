@@ -1,0 +1,292 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <!--
+    Estilos compartilhados da interface (incluídos no App.axaml).
+    Controles reutilizáveis por classe:
+      Border.card              cartão arredondado (fundo CardBrush, borda CardBorderBrush)
+      TextBlock.title          título de cartão (17, SemiBold)
+      TextBlock.heading        título grande de tela (30, SemiBold)
+      TextBlock.muted          texto secundário (13)
+      Path.icon                ícone de traço (24 px); Path.icon.accent usa AccentBrush
+      Button.primary           botão de ação principal (preenchido com AccentBrush)
+      Button.tile              botão de cartão (fundo CardBrush)
+      Button.nav               item do menu lateral; Button.nav.selected = item ativo
+      Button.seg               botão do segmentado; Button.seg.selected = opção ativa
+      Button.swatch            bolinha de cor; Button.swatch.selected = cor ativa
+      Button.winbtn            botão da barra de título (Button.winbtn.close fecha)
+      Button.link              botão de texto em destaque
+      Border.pill              pílula (cantos arredondados, fundo CardBrush)
+      TextBox.field            campo de texto arredondado
+  -->
+
+  <Styles.Resources>
+    <ControlTemplate x:Key="ButtonSurface" TargetType="Button">
+      <Border Name="PART_Border"
+              Background="{TemplateBinding Background}"
+              BorderBrush="{TemplateBinding BorderBrush}"
+              BorderThickness="{TemplateBinding BorderThickness}"
+              CornerRadius="{TemplateBinding CornerRadius}"
+              Padding="{TemplateBinding Padding}">
+        <ContentPresenter Name="PART_ContentPresenter"
+                          Content="{TemplateBinding Content}"
+                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                          HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
+                          VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" />
+      </Border>
+    </ControlTemplate>
+  </Styles.Resources>
+
+  <Style Selector="Border.card">
+    <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="16" />
+    <Setter Property="Padding" Value="22,18" />
+  </Style>
+
+  <Style Selector="Border.pill">
+    <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="999" />
+    <Setter Property="Padding" Value="12,6" />
+  </Style>
+
+  <Style Selector="TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+  </Style>
+  <Style Selector="TextBlock.title">
+    <Setter Property="FontSize" Value="17" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="TextBlock.heading">
+    <Setter Property="FontSize" Value="30" />
+    <Setter Property="FontWeight" Value="SemiBold" />
+  </Style>
+  <Style Selector="TextBlock.muted">
+    <Setter Property="FontSize" Value="13" />
+    <Setter Property="Foreground" Value="{DynamicResource TextSecondaryBrush}" />
+  </Style>
+
+  <Style Selector="Path.icon">
+    <Setter Property="Stroke" Value="{DynamicResource TextPrimaryBrush}" />
+    <Setter Property="StrokeThickness" Value="1.8" />
+    <Setter Property="StrokeLineCap" Value="Round" />
+    <Setter Property="StrokeJoin" Value="Round" />
+    <Setter Property="Width" Value="24" />
+    <Setter Property="Height" Value="24" />
+    <Setter Property="Stretch" Value="None" />
+  </Style>
+  <Style Selector="Path.icon.accent">
+    <Setter Property="Stroke" Value="{DynamicResource AccentBrush}" />
+  </Style>
+
+  <!-- Botão de cartão -->
+  <Style Selector="Button.tile">
+    <Setter Property="Template" Value="{StaticResource ButtonSurface}" />
+    <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="12" />
+    <Setter Property="Padding" Value="16,0" />
+    <Setter Property="Height" Value="44" />
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <Style Selector="Button.tile:pointerover">
+    <Setter Property="Background" Value="{DynamicResource InputBrush}" />
+  </Style>
+
+  <!-- Botão principal (ação do cartão) -->
+  <Style Selector="Button.primary">
+    <Setter Property="Template" Value="{StaticResource ButtonSurface}" />
+    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="12" />
+    <Setter Property="Padding" Value="18,0" />
+    <Setter Property="Height" Value="46" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <Style Selector="Button.primary:pointerover">
+    <Setter Property="Background" Value="{DynamicResource AccentHoverBrush}" />
+  </Style>
+  <Style Selector="Button.primary:pressed">
+    <Setter Property="Background" Value="{DynamicResource AccentPressedBrush}" />
+  </Style>
+  <Style Selector="Button.primary:disabled">
+    <Setter Property="Opacity" Value="0.5" />
+  </Style>
+  <Style Selector="Button.primary TextBlock">
+    <Setter Property="Foreground" Value="White" />
+  </Style>
+
+  <!-- Item do menu lateral -->
+  <Style Selector="Button.nav">
+    <Setter Property="Template" Value="{StaticResource ButtonSurface}" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="12" />
+    <Setter Property="Padding" Value="14,0" />
+    <Setter Property="Height" Value="46" />
+    <Setter Property="HorizontalContentAlignment" Value="Left" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <Style Selector="Button.nav:pointerover">
+    <Setter Property="Background" Value="{DynamicResource InputBrush}" />
+  </Style>
+  <Style Selector="Button.nav.selected">
+    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+  </Style>
+  <Style Selector="Button.nav.selected:pointerover">
+    <Setter Property="Background" Value="{DynamicResource AccentHoverBrush}" />
+  </Style>
+  <Style Selector="Button.nav.selected TextBlock">
+    <Setter Property="Foreground" Value="White" />
+  </Style>
+  <!-- Subitem selecionado: fundo suave arredondado (sem o azul cheio do item principal) -->
+  <Style Selector="Button.nav.sub.selected">
+    <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+  </Style>
+  <Style Selector="Button.nav.sub.selected:pointerover">
+    <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+  </Style>
+  <Style Selector="Button.nav.sub.selected TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+  </Style>
+  <Style Selector="Button.nav.sub">
+    <Setter Property="Height" Value="40" />
+    <Setter Property="Padding" Value="12,0" />
+  </Style>
+
+  <!-- Segmentado (Sistema / Claro / Escuro) -->
+  <Style Selector="Button.seg">
+    <Setter Property="Template" Value="{StaticResource ButtonSurface}" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="9" />
+    <Setter Property="Padding" Value="12,0" />
+    <Setter Property="Height" Value="34" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <Style Selector="Button.seg:pointerover">
+    <Setter Property="Background" Value="{DynamicResource InputBrush}" />
+  </Style>
+  <Style Selector="Button.seg.selected">
+    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+  </Style>
+  <Style Selector="Button.seg.selected:pointerover">
+    <Setter Property="Background" Value="{DynamicResource AccentHoverBrush}" />
+  </Style>
+  <Style Selector="Button.seg.selected TextBlock">
+    <Setter Property="Foreground" Value="White" />
+  </Style>
+
+  <!-- Bolinha de cor do tema -->
+  <Style Selector="Button.swatch">
+    <Setter Property="Template" Value="{StaticResource ButtonSurface}" />
+    <Setter Property="Width" Value="30" />
+    <Setter Property="Height" Value="30" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="CornerRadius" Value="15" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="2" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <Style Selector="Button.swatch:pointerover">
+    <Setter Property="Opacity" Value="0.85" />
+  </Style>
+  <Style Selector="Button.swatch.selected">
+    <Setter Property="BorderBrush" Value="{DynamicResource TextPrimaryBrush}" />
+  </Style>
+
+  <!-- Botões da barra de título -->
+  <Style Selector="Button.winbtn">
+    <Setter Property="Template" Value="{StaticResource ButtonSurface}" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="CornerRadius" Value="0" />
+    <Setter Property="Width" Value="46" />
+    <Setter Property="Height" Value="40" />
+    <Setter Property="Padding" Value="0" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <Style Selector="Button.winbtn:pointerover">
+    <Setter Property="Background" Value="{DynamicResource InputBrush}" />
+  </Style>
+  <Style Selector="Button.winbtn.close:pointerover">
+    <Setter Property="Background" Value="{DynamicResource StatusErrorBrush}" />
+  </Style>
+
+  <!-- Botão de texto em destaque -->
+  <Style Selector="Button.link">
+    <Setter Property="Template" Value="{StaticResource ButtonSurface}" />
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="BorderBrush" Value="Transparent" />
+    <Setter Property="BorderThickness" Value="0" />
+    <Setter Property="Padding" Value="4,2" />
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <Style Selector="Button.link TextBlock">
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+  </Style>
+  <Style Selector="Button.link:pointerover TextBlock">
+    <Setter Property="TextDecorations" Value="Underline" />
+  </Style>
+
+  <!-- Lado do outro PC no diagrama da tela Conexão -->
+  <Style Selector="Button.side">
+    <Setter Property="Template" Value="{StaticResource ButtonSurface}" />
+    <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="CornerRadius" Value="12" />
+    <Setter Property="Margin" Value="6" />
+    <Setter Property="Padding" Value="8,0" />
+    <Setter Property="HorizontalContentAlignment" Value="Center" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    <Setter Property="Cursor" Value="Hand" />
+  </Style>
+  <Style Selector="Button.side:pointerover">
+    <Setter Property="Background" Value="{DynamicResource InputBrush}" />
+  </Style>
+  <Style Selector="Button.side.selected">
+    <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+  </Style>
+  <Style Selector="Button.side.selected:pointerover">
+    <Setter Property="Background" Value="{DynamicResource AccentHoverBrush}" />
+  </Style>
+  <Style Selector="Button.side.selected TextBlock">
+    <Setter Property="Foreground" Value="White" />
+  </Style>
+
+  <!-- Campo de texto -->
+  <Style Selector="TextBox.field">
+    <Setter Property="Background" Value="{DynamicResource InputBrush}" />
+    <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+    <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    <Setter Property="CornerRadius" Value="10" />
+    <Setter Property="Padding" Value="12,0" />
+    <Setter Property="Height" Value="44" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+  </Style>
+</Styles>

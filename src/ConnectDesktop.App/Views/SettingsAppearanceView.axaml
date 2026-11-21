@@ -1,0 +1,99 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:s="using:ConnectDesktop.App.Services"
+             x:Class="ConnectDesktop.App.Views.SettingsAppearanceView">
+  <UserControl.Styles>
+    <Style Selector="Button.themeCard">
+      <Setter Property="Padding" Value="10" />
+      <Setter Property="CornerRadius" Value="12" />
+      <Setter Property="BorderThickness" Value="2" />
+      <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+      <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    </Style>
+    <Style Selector="Button.themeCard.selected">
+      <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}" />
+    </Style>
+  </UserControl.Styles>
+
+  <ScrollViewer>
+    <StackPanel Spacing="16" Margin="0,0,8,0">
+
+      <StackPanel Spacing="4">
+        <TextBlock Text="{s:Tr settings.appearance.title}" FontSize="24" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
+        <TextBlock Text="{s:Tr settings.appearance.subtitle}" Foreground="{DynamicResource TextSecondaryBrush}" />
+      </StackPanel>
+
+      <!-- Tema -->
+      <Border Classes="card">
+        <StackPanel Spacing="12">
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <Path Classes="icon accent" Data="{StaticResource IconPalette}" VerticalAlignment="Center" />
+            <TextBlock Text="{s:Tr settings.appearance.theme}" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
+          </StackPanel>
+          <StackPanel Orientation="Horizontal" Spacing="12">
+
+            <Button x:Name="ThemeSystemButton" Classes="themeCard" Tag="System" Width="180">
+              <StackPanel Spacing="8">
+                <Border Height="90" CornerRadius="8" ClipToBounds="True">
+                  <Grid ColumnDefinitions="*,*">
+                    <Border Grid.Column="0" Background="#F4F6FB">
+                      <Border Margin="10,12,10,0" Height="10" CornerRadius="4" Background="#2563EB" VerticalAlignment="Top" />
+                    </Border>
+                    <Border Grid.Column="1" Background="#0B1220">
+                      <Border Margin="10,12,10,0" Height="10" CornerRadius="4" Background="#2563EB" VerticalAlignment="Top" />
+                    </Border>
+                  </Grid>
+                </Border>
+                <TextBlock Text="{s:Tr settings.appearance.system}" HorizontalAlignment="Center" Foreground="{DynamicResource TextPrimaryBrush}" />
+              </StackPanel>
+            </Button>
+
+            <Button x:Name="ThemeLightButton" Classes="themeCard" Tag="Light" Width="180">
+              <StackPanel Spacing="8">
+                <Border Height="90" CornerRadius="8" Background="#F4F6FB">
+                  <Border Margin="10,12,10,0" Height="10" CornerRadius="4" Background="#2563EB" VerticalAlignment="Top" />
+                </Border>
+                <TextBlock Text="{s:Tr settings.appearance.light}" HorizontalAlignment="Center" Foreground="{DynamicResource TextPrimaryBrush}" />
+              </StackPanel>
+            </Button>
+
+            <Button x:Name="ThemeDarkButton" Classes="themeCard" Tag="Dark" Width="180">
+              <StackPanel Spacing="8">
+                <Border Height="90" CornerRadius="8" Background="#0B1220">
+                  <Border Margin="10,12,10,0" Height="10" CornerRadius="4" Background="#2563EB" VerticalAlignment="Top" />
+                </Border>
+                <TextBlock Text="{s:Tr settings.appearance.dark}" HorizontalAlignment="Center" Foreground="{DynamicResource TextPrimaryBrush}" />
+              </StackPanel>
+            </Button>
+
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
+      <!-- Cor de destaque -->
+      <Border Classes="card">
+        <StackPanel Spacing="14">
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <Path Classes="icon accent" Data="{StaticResource IconPalette}" VerticalAlignment="Center" />
+            <TextBlock Text="{s:Tr settings.appearance.accent}" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
+          </StackPanel>
+
+          <StackPanel x:Name="PresetPanel" Orientation="Horizontal" Spacing="12" />
+
+          <TextBlock Text="{s:Tr settings.appearance.custom}" Foreground="{DynamicResource TextSecondaryBrush}" />
+          <Grid ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,0,0,0">
+            <Border Grid.Column="0" Width="44" Height="44" CornerRadius="10" Margin="0,0,12,0"
+                    BorderBrush="{DynamicResource CardBorderBrush}" BorderThickness="1">
+              <Border x:Name="CustomPreview" CornerRadius="9" Margin="2" Background="{DynamicResource AccentBrush}" />
+            </Border>
+            <TextBox x:Name="HexBox" Classes="field" Grid.Column="1" MaxLength="7" Watermark="#RRGGBB" Margin="0,0,12,0" />
+            <Button x:Name="ApplyHexButton" Grid.Column="2" Classes="primary" Content="{s:Tr settings.appearance.apply}" Margin="0,0,12,0" />
+            <TextBlock x:Name="HexStatusText" Grid.Column="3" VerticalAlignment="Center" Foreground="{DynamicResource TextSecondaryBrush}" />
+          </Grid>
+        </StackPanel>
+      </Border>
+
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

@@ -1,4 +1,5 @@
 ﻿using Avalonia;
+using ConnectDesktop.App.Services;
 
 namespace ConnectDesktop.App;
 
@@ -29,6 +30,8 @@ internal static class Program
 
         try
         {
+            App.StartMinimized = Array.IndexOf(args, StartupService.MinimizedArg) >= 0;
+            App.StartPage = ParsePage(args);
             BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
         }
         catch (Exception ex)
@@ -39,6 +42,22 @@ internal static class Program
         {
             mutex?.Dispose();
         }
+    }
+
+    /// <summary>Lê --page=nome (teste de telas). Nome desconhecido ou ausente: connection.</summary>
+    private static string ParsePage(string[] args)
+    {
+        string[] pages = { "connection", "devices", "transfers", "pairs", "general", "appearance", "language", "startup", "about" };
+        const string prefix = "--page=";
+        foreach (var arg in args)
+        {
+            if (!arg.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                continue;
+            var name = arg[prefix.Length..].Trim().ToLowerInvariant();
+            if (Array.IndexOf(pages, name) >= 0)
+                return name;
+        }
+        return "connection";
     }
 
     public static AppBuilder BuildAvaloniaApp()

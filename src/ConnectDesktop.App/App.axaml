@@ -2,7 +2,20 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="ConnectDesktop.App.App"
              RequestedThemeVariant="Default">
+  <Application.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.MergedDictionaries>
+        <ResourceInclude Source="avares://ConnectDesktop/Views/Art/Icons.axaml" />
+      </ResourceDictionary.MergedDictionaries>
+      <!-- Cores de estado (semáforo do PC), iguais nos dois temas -->
+      <SolidColorBrush x:Key="StatusOkBrush" Color="#22C55E" />
+      <SolidColorBrush x:Key="StatusWaitBrush" Color="#F59E0B" />
+      <SolidColorBrush x:Key="StatusErrorBrush" Color="#EF4444" />
+      <SolidColorBrush x:Key="StatusErrorSoftBrush" Color="#26EF4444" />
+    </ResourceDictionary>
+  </Application.Resources>
   <Application.Styles>
     <FluentTheme />
+    <StyleInclude Source="avares://ConnectDesktop/Views/Controls/SharedStyles.axaml" />
   </Application.Styles>
 </Application>

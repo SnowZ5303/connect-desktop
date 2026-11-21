@@ -1,0 +1,51 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:s="using:ConnectDesktop.App.Services"
+             x:Class="ConnectDesktop.App.Views.SavedPairsView">
+  <UserControl.Styles>
+    <Style Selector="Border.row">
+      <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="12" />
+      <Setter Property="Padding" Value="16,14" />
+    </Style>
+    <Style Selector="TextBlock.rowTitle">
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="FontSize" Value="15" />
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    </Style>
+  </UserControl.Styles>
+
+  <ScrollViewer>
+    <StackPanel Spacing="16" Margin="0,0,8,0">
+
+      <StackPanel Spacing="4">
+        <TextBlock Text="{s:Tr pairs.title}" FontSize="24" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
+        <TextBlock Text="{s:Tr pairs.subtitle}" Foreground="{DynamicResource TextSecondaryBrush}" />
+      </StackPanel>
+
+      <!-- Estado vazio -->
+      <Border x:Name="EmptyPanel" Classes="card" IsVisible="False">
+        <StackPanel Spacing="10" HorizontalAlignment="Center" Margin="0,16">
+          <Border Width="96" Height="96" CornerRadius="48" HorizontalAlignment="Center"
+                  Background="{DynamicResource AccentSoftBrush}" BorderBrush="{DynamicResource AccentBrush}" BorderThickness="2">
+            <Grid>
+              <Path Classes="icon accent" Data="{StaticResource IconBookmark}" Width="44" Height="44" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Grid>
+          </Border>
+          <TextBlock Text="{s:Tr pairs.emptyTitle}" FontSize="16" FontWeight="SemiBold" HorizontalAlignment="Center"
+                     Foreground="{DynamicResource TextPrimaryBrush}" />
+          <TextBlock Text="{s:Tr pairs.emptyHint}" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="380"
+                     HorizontalAlignment="Center" Foreground="{DynamicResource TextSecondaryBrush}" />
+        </StackPanel>
+      </Border>
+
+      <!-- Lista de pares -->
+      <Border x:Name="ListPanel" Classes="card" IsVisible="False">
+        <StackPanel x:Name="PairsList" Spacing="10" />
+      </Border>
+
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

@@ -1,17 +1,45 @@
+using System;
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Input;
+using Avalonia.Layout;
 using Avalonia.Interactivity;
 using Avalonia.Media;
-using ConnectDesktop.Core.Layout;
+using Avalonia.VisualTree;
+using ConnectDesktop.App.Services;
+using ConnectDesktop.App.Views;
 using ConnectDesktop.Core.Net;
-using ConnectDesktop.Core.Update;
+using Path = Avalonia.Controls.Shapes.Path;
 
 namespace ConnectDesktop.App;
 
+/// <summary>
+/// Janela principal: barra de título própria, menu lateral, área de conteúdo e barra inferior (aparência, tema, idioma).
+/// Fechar a janela só esconde (o app continua na bandeja).
+/// </summary>
 public partial class MainWindow : Window
 {
+    /// <summary>Cores do seletor livre (botão arco-íris), em hexadecimal.</summary>
+    private static readonly string[] ColorChoices =
+    {
+        "#EF4444", "#F97316", "#F59E0B", "#EAB308", "#22C55E", "#10B981",
+        "#14B8A6", "#06B6D4", "#3B82F6", "#6366F1", "#A855F7", "#EC4899"
+    };
+
+    private static readonly HashSet<string> SettingsKeys = new() { "general", "appearance", "language", "startup" };
+
     private readonly AppController _controller;
-    private bool _loading = true;
+    private readonly ConnectionView _connectionView;
+    private readonly Dictionary<string, UserControl> _pages = new();
+    private readonly Dictionary<string, Button> _navButtons = new();
+    private readonly List<Button> _presetSwatches = new();
+    private Button _customSwatch = null!;
+    private bool _loading;
     private bool _allowClose;
+    private string _status = "";
+    private string? _warning;
+    private bool _warningIsError;
 
     /// <summary>Construtor usado pelo carregador de XAML. O controlador vem de <see cref="App.Controller"/>.</summary>
     public MainWindow() : this(App.Controller ?? throw new InvalidOperationException("O controlador do aplicativo não foi criado."))
@@ -24,298 +52,420 @@ public partial class MainWindow : Window
         InitializeComponent();
 
         Icon = AppIcon.Create();
-        VersionText.Text = $"Versão {_controller.AppVersion}";
-        NameBox.Text = _controller.Settings.DeviceName;
-        ClipboardCheck.IsChecked = _controller.Settings.ShareClipboard;
-        UpdatesCheck.IsChecked = _controller.Settings.CheckUpdatesOnStart;
+        _navButtons["connection"] = NavConnection;
+        _navButtons["devices"] = NavDevices;
+        _navButtons["transfers"] = NavTransfers;
+        _navButtons["pairs"] = NavPairs;
+        _navButtons["general"] = NavGeneral;
+        _navButtons["appearance"] = NavAppearance;
+        _navButtons["language"] = NavLanguage;
+        _navButtons["startup"] = NavStartup;
+        _navButtons["about"] = NavAbout;
 
-        RefreshRoleView();
-        RefreshSideButtons();
-        RefreshConnectButton();
-        RebuildPeers(_controller.SecondaryPeers);
+        BuildSwatches();
+        BuildLanguages();
 
-        // Só ações do usuário depois que a janela abriu contam como mudança.
-        Opened += (_, _) => _loading = false;
+        _connectionView = new ConnectionView(_controller);
+        _connectionView.NavigateRequested += ShowPage;
+        _pages["connection"] = _connectionView;
 
         _controller.StatusChanged += OnStatusChanged;
-        _controller.PairingCodeChanged += OnPairingCodeChanged;
-        _controller.PeersChanged += OnPeersChanged;
-        _controller.ConnectionChanged += OnConnectionChanged;
         _controller.WarningChanged += OnWarningChanged;
-        _controller.UpdateAvailable += OnUpdateAvailable;
+        _controller.StateChanged += RefreshShell;
+        Loc.Instance.LanguageChanged += RefreshShell;
+        PropertyChanged += (_, e) =>
+        {
+            if (e.Property == WindowStateProperty)
+                RefreshMaximizeIcon();
+        };
+
+        Opened += OnOpened;
+        ShowPage(App.StartPage);
+        SetSettingsExpanded(true);
+        RefreshShell();
+    }
+
+    /// <summary>Tamanho inicial de 1000x1000, limitado a 92% da área de trabalho, centralizado na tela.</summary>
+    private void OnOpened(object? sender, EventArgs e)
+    {
+        var screen = Screens.ScreenFromWindow(this) ?? Screens.Primary;
+        if (screen is null)
+            return;
+
+        var area = screen.WorkingArea;
+        var scale = screen.Scaling;
+        var width = Math.Min(1000, area.Width / scale * 0.92);
+        var height = Math.Min(1000, area.Height / scale * 0.92);
+        Width = width;
+        Height = height;
+        Position = new PixelPoint(
+            area.X + (int)((area.Width - width * scale) / 2),
+            area.Y + (int)((area.Height - height * scale) / 2));
     }
 
     /// <summary>Permite fechar a janela de verdade (usado ao sair pelo menu da bandeja ou ao atualizar).</summary>
     public void AllowClose() => _allowClose = true;
 
-    // ---------------- Eventos do controlador (sempre na thread da UI) ----------------
+    // ---------------- Eventos do controlador (thread da UI) ----------------
 
-    private void OnStatusChanged(string text) => StatusText.Text = text;
-
-    private void OnPairingCodeChanged(string? code) => CodeText.Text = FormatCode(code);
-
-    private void OnPeersChanged(IReadOnlyList<PeerInfo> peers) => RebuildPeers(peers);
-
-    private void OnConnectionChanged()
+    private void OnStatusChanged(string text)
     {
-        RefreshConnectButton();
-        RebuildPeers(_controller.SecondaryPeers);
+        _status = text;
+        RefreshStatusPill();
     }
 
     private void OnWarningChanged(string? text, bool isError)
     {
-        WarningBorder.IsVisible = !string.IsNullOrEmpty(text);
-        WarningBorder.Background = new SolidColorBrush(Color.Parse(isError ? "#FDECEA" : "#E8F1FF"));
-        WarningText.Text = text ?? string.Empty;
+        _warning = text;
+        _warningIsError = isError;
+        RefreshStatusPill();
     }
 
-    private void OnUpdateAvailable(ReleaseInfo release)
+    // ---------------- Desenho do shell ----------------
+
+    /// <summary>Atualiza tudo que depende de estado, configurações ou idioma.</summary>
+    private void RefreshShell()
     {
-        UpdateText.Text = $"Nova versão v{release.Version} disponível";
-        UpdateButton.IsEnabled = true;
-        UpdateProgress.IsVisible = false;
-        UpdateBanner.IsVisible = true;
+        VersionText.Text = Loc.Instance.Format("app.version", _controller.AppVersion);
+        RefreshStatusPill();
+        RefreshModeButtons();
+        RefreshSwatches();
+        RefreshLanguageCombo();
     }
 
-    // ---------------- Papel e painéis ----------------
-
-    private void OnRoleChecked(object? sender, RoutedEventArgs e)
-    {
-        if (_loading)
-            return;
-
-        var role = ReferenceEquals(sender, PrimaryRadio) ? DeviceRole.Primary : DeviceRole.Secondary;
-        if (role == _controller.Settings.Role)
-            return;
-
-        _ = ApplyRoleAsync(role);
-    }
-
-    private async Task ApplyRoleAsync(DeviceRole role)
-    {
-        await _controller.SetRoleAsync(role);
-        RefreshRoleView();
-        RefreshConnectButton();
-        RebuildPeers(_controller.SecondaryPeers);
-    }
-
-    private void RefreshRoleView()
+    private void RefreshStatusPill()
     {
         var primary = _controller.Settings.Role == DeviceRole.Primary;
-        PrimaryPanel.IsVisible = primary;
-        SecondaryPanel.IsVisible = !primary;
+        var connected = primary ? _controller.IsPrimaryConnected : _controller.IsSecondaryConnected;
+        var hasError = _warningIsError && !string.IsNullOrEmpty(_warning);
+
+        string text;
+        string state;
+        if (hasError)
+        {
+            text = Loc.Instance["pill.error"];
+            state = "error";
+        }
+        else if (connected)
+        {
+            // Controlando: o status atual é o de controle (principal controla ou secundário é controlado).
+            var peer = _controller.ConnectedPeerName ?? string.Empty;
+            var controlling = _status == Loc.Instance.Format("status.controlling", peer)
+                || _status == Loc.Instance.Format("status.controlled_by", peer);
+            text = Loc.Instance[controlling ? "pill.controlling" : "pill.connected"];
+            state = "ok";
+        }
+        else if (primary && _controller.SecondaryPeers.Count > 0)
+        {
+            text = Loc.Instance["pill.ready"];
+            state = "ok";
+        }
+        else if (primary)
+        {
+            text = Loc.Instance["pill.searching"];
+            state = "wait";
+        }
+        else
+        {
+            text = Loc.Instance["pill.waiting"];
+            state = "wait";
+        }
+
+        StatusPillText.Text = text;
+        StatusDot.Classes.Set("ok", state == "ok");
+        StatusDot.Classes.Set("error", state == "error");
+    }
+
+    private void RefreshModeButtons()
+    {
+        var mode = _controller.Settings.ThemeMode;
+        ModeSystem.Classes.Set("selected", mode == "System");
+        ModeLight.Classes.Set("selected", mode == "Light");
+        ModeDark.Classes.Set("selected", mode == "Dark");
+    }
+
+    private void BuildSwatches()
+    {
+        foreach (var hex in ThemeService.PresetAccents)
+        {
+            var swatch = new Button
+            {
+                Tag = hex,
+                Background = new SolidColorBrush(Color.Parse(hex))
+            };
+            swatch.Classes.Add("swatch");
+            swatch.Click += OnSwatchClick;
+            ThemeSwatches.Children.Add(swatch);
+            _presetSwatches.Add(swatch);
+        }
+
+        _customSwatch = new Button
+        {
+            Tag = "custom",
+            Background = new LinearGradientBrush
+            {
+                StartPoint = new RelativePoint(0, 0, RelativeUnit.Relative),
+                EndPoint = new RelativePoint(1, 1, RelativeUnit.Relative),
+                GradientStops =
+                {
+                    new GradientStop(Color.Parse("#EF4444"), 0),
+                    new GradientStop(Color.Parse("#F59E0B"), 0.25),
+                    new GradientStop(Color.Parse("#22C55E"), 0.5),
+                    new GradientStop(Color.Parse("#3B82F6"), 0.75),
+                    new GradientStop(Color.Parse("#A855F7"), 1)
+                }
+            }
+        };
+        _customSwatch.Classes.Add("swatch");
+        ThemeSwatches.Children.Add(_customSwatch);
+    }
+
+    private void RefreshSwatches()
+    {
+        var accent = _controller.Settings.AccentColor;
+        var isPreset = false;
+        foreach (var swatch in _presetSwatches)
+        {
+            var hex = (string)swatch.Tag!;
+            var selected = string.Equals(hex, accent, StringComparison.OrdinalIgnoreCase);
+            isPreset |= selected;
+            swatch.Classes.Set("selected", selected);
+            swatch.Content = selected ? CheckMark() : null;
+        }
+
+        var customSelected = !isPreset;
+        _customSwatch.Classes.Set("selected", customSelected);
+        _customSwatch.Content = customSelected ? CheckMark() : null;
+
+        // O painel de cores é refeito a cada atualização para usar o idioma atual.
+        var flyout = new Flyout { Placement = PlacementMode.TopEdgeAlignedLeft };
+        flyout.Content = BuildColorPanel(flyout, accent);
+        _customSwatch.Flyout = flyout;
+    }
+
+    private void BuildLanguages()
+    {
+        foreach (var (code, name) in Loc.Languages)
+            LanguageCombo.Items.Add(new ComboBoxItem { Content = name, Tag = code });
+    }
+
+    private void RefreshLanguageCombo()
+    {
+        var code = string.IsNullOrEmpty(_controller.Settings.Language)
+            ? Loc.Instance.CurrentLanguage
+            : _controller.Settings.Language;
 
         var wasLoading = _loading;
         _loading = true;
-        PrimaryRadio.IsChecked = primary;
-        SecondaryRadio.IsChecked = !primary;
+        foreach (var item in LanguageCombo.Items.OfType<ComboBoxItem>())
+        {
+            if (item.Tag as string == code)
+                LanguageCombo.SelectedItem = item;
+        }
         _loading = wasLoading;
     }
 
-    private void RefreshConnectButton()
+    private Control CheckMark()
     {
-        ConnectButton.Content = _controller.IsPrimaryConnected ? "Desconectar" : "Conectar";
+        return new Path
+        {
+            Data = this.FindResource("IconCheck") as Geometry,
+            Width = 16,
+            Height = 16,
+            Stretch = Stretch.Uniform,
+            Stroke = Brushes.White,
+            StrokeThickness = 2.2,
+            StrokeLineCap = PenLineCap.Round,
+            StrokeJoin = PenLineJoin.Round
+        };
     }
 
-    private void RebuildPeers(IReadOnlyList<PeerInfo> peers)
+    /// <summary>Painel do seletor de cor: campo hex, botão Aplicar e 12 cores prontas.</summary>
+    private Control BuildColorPanel(Flyout flyout, string accent)
     {
-        var selectedId = (PeersList.SelectedItem as PeerItem)?.Peer.Id;
-        PeersList.Items.Clear();
-        foreach (var peer in peers)
+        var title = new TextBlock
         {
-            var item = new PeerItem(peer, IsPaired(peer.Id));
-            PeersList.Items.Add(item);
-            if (peer.Id == selectedId)
-                PeersList.SelectedItem = item;
+            Text = Loc.Instance["shell.color_title"],
+            FontWeight = FontWeight.SemiBold
+        };
+
+        var grid = new UniformGrid { Columns = 6 };
+        foreach (var hex in ColorChoices)
+        {
+            var choice = new Button
+            {
+                Tag = hex,
+                Background = new SolidColorBrush(Color.Parse(hex)),
+                Margin = new Thickness(3)
+            };
+            choice.Classes.Add("swatch");
+            choice.Click += (_, _) =>
+            {
+                flyout.Hide();
+                _controller.SetTheme(_controller.Settings.ThemeMode, hex);
+            };
+            grid.Children.Add(choice);
         }
 
-        PeersList.IsVisible = peers.Count > 0;
-        EmptyPeersText.IsVisible = peers.Count == 0;
+        var hexBox = new TextBox
+        {
+            Classes = { "field" },
+            Watermark = "#RRGGBB",
+            Text = accent,
+            MaxLength = 7,
+            Width = 150
+        };
+        var error = new TextBlock
+        {
+            Classes = { "muted" },
+            Text = Loc.Instance["shell.color_invalid"],
+            IsVisible = false
+        };
+        var apply = new Button
+        {
+            Content = Loc.Instance["shell.color_apply"],
+            Classes = { "primary" },
+            Height = 44,
+            MinWidth = 110
+        };
+        apply.Click += (_, _) =>
+        {
+            if (!TryNormalizeHex(hexBox.Text ?? string.Empty, out var hex))
+            {
+                error.IsVisible = true;
+                return;
+            }
+            flyout.Hide();
+            _controller.SetTheme(_controller.Settings.ThemeMode, hex);
+        };
+
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
+        row.Children.Add(hexBox);
+        row.Children.Add(apply);
+
+        return new StackPanel
+        {
+            Width = 280,
+            Margin = new Thickness(4),
+            Spacing = 12,
+            Children = { title, grid, row, error }
+        };
     }
 
-    private bool IsPaired(string peerId)
+    private static bool TryNormalizeHex(string text, out string hex)
     {
-        try
-        {
-            return _controller.Store?.GetKey(peerId) is not null;
-        }
-        catch (Exception ex)
-        {
-            Log.Error("Falha ao consultar o pareamento.", ex);
+        hex = string.Empty;
+        if (!Color.TryParse(text.Trim(), out var color))
             return false;
-        }
+        hex = $"#{color.R:X2}{color.G:X2}{color.B:X2}";
+        return true;
     }
 
-    private static string FormatCode(string? code)
+    // ---------------- Ações ----------------
+
+    private void OnNavClick(object? sender, RoutedEventArgs e)
     {
-        if (string.IsNullOrEmpty(code))
-            return "--- ---";
-        return code.Length == 6 ? $"{code[..3]} {code[3..]}" : code;
+        if (sender is Button { Tag: string key })
+            ShowPage(key);
     }
 
-    private void OnConnectClick(object? sender, RoutedEventArgs e)
+    private void OnSettingsToggleClick(object? sender, RoutedEventArgs e)
+        => SetSettingsExpanded(!SettingsItems.IsVisible);
+
+    private void SetSettingsExpanded(bool expanded)
     {
-        if (_controller.IsPrimaryConnected)
+        SettingsItems.IsVisible = expanded;
+        SettingsChevron.Data = this.FindResource(expanded ? "IconChevronUp" : "IconChevronDown") as Geometry;
+    }
+
+    /// <summary>Mostra uma página do menu (cria na primeira vez e reaproveita depois).</summary>
+    private void ShowPage(string key)
+    {
+        if (!_pages.TryGetValue(key, out var page))
         {
-            _ = _controller.DisconnectAsync();
+            page = CreatePage(key);
+            _pages[key] = page;
+        }
+
+        ContentHost.Content = page;
+        foreach (var (name, button) in _navButtons)
+            button.Classes.Set("selected", name == key);
+
+        if (SettingsKeys.Contains(key))
+            SetSettingsExpanded(true);
+    }
+
+    private static UserControl CreatePage(string key) => key switch
+    {
+        "devices" => new DevicesView(),
+        "transfers" => new TransfersView(),
+        "pairs" => new SavedPairsView(),
+        "general" => new SettingsGeneralView(),
+        "appearance" => new SettingsAppearanceView(),
+        "language" => new SettingsLanguageView(),
+        "startup" => new SettingsStartupView(),
+        _ => new AboutView()
+    };
+
+    private void OnModeClick(object? sender, RoutedEventArgs e)
+    {
+        if (_loading || sender is not Button { Tag: string mode })
             return;
-        }
+        _controller.SetTheme(mode, _controller.Settings.AccentColor);
+    }
 
-        if (PeersList.SelectedItem is not PeerItem item)
-        {
-            StatusText.Text = "Selecione um PC secundário na lista.";
+    private void OnSwatchClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string hex })
             return;
-        }
-
-        _ = _controller.ConnectAsync(item.Peer);
+        _controller.SetTheme(_controller.Settings.ThemeMode, hex);
     }
 
-    private void OnSideClick(object? sender, RoutedEventArgs e)
+    private void OnLanguageChanged(object? sender, SelectionChangedEventArgs e)
     {
-        if (sender is not Button button || button.Tag is not string tag)
+        if (_loading || LanguageCombo.SelectedItem is not ComboBoxItem { Tag: string code })
             return;
-        if (!Enum.TryParse<ScreenSide>(tag, out var side))
+        if (code != _controller.Settings.Language)
+            _controller.SetLanguage(code);
+    }
+
+    // ---------------- Barra de título e janela ----------------
+
+    private void OnTitleBarPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (e.ClickCount != 1 || !e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
             return;
-        if (_loading || side == _controller.Settings.SecondarySide)
+        if (IsFromButton(e.Source))
             return;
-
-        _controller.SetSecondarySide(side);
-        RefreshSideButtons();
+        BeginMoveDrag(e);
     }
 
-    private void RefreshSideButtons()
+    private void OnTitleBarDoubleTapped(object? sender, TappedEventArgs e)
     {
-        var selected = _controller.Settings.SecondarySide;
-        ApplySideButton(LeftButton, "Esquerda", ScreenSide.Left, selected);
-        ApplySideButton(RightButton, "Direita", ScreenSide.Right, selected);
-        ApplySideButton(TopButton, "Acima", ScreenSide.Top, selected);
-        ApplySideButton(BottomButton, "Abaixo", ScreenSide.Bottom, selected);
-    }
-
-    private static void ApplySideButton(Button button, string label, ScreenSide side, ScreenSide selected)
-    {
-        var isSelected = side == selected;
-        button.Content = isSelected ? "Outro PC" : label;
-        button.Classes.Set("selected", isSelected);
-    }
-
-    // ---------------- Nome, opções e atualizações ----------------
-
-    private void OnSaveNameClick(object? sender, RoutedEventArgs e)
-    {
-        _controller.SetDeviceName(NameBox.Text ?? string.Empty);
-        NameBox.Text = _controller.Settings.DeviceName;
-    }
-
-    private void OnOptionToggled(object? sender, RoutedEventArgs e)
-    {
-        if (_loading)
+        if (IsFromButton(e.Source))
             return;
-
-        if (ReferenceEquals(sender, ClipboardCheck))
-        {
-            var value = ClipboardCheck.IsChecked == true;
-            if (value != _controller.Settings.ShareClipboard)
-                _controller.SetShareClipboard(value);
-        }
-        else if (ReferenceEquals(sender, UpdatesCheck))
-        {
-            var value = UpdatesCheck.IsChecked == true;
-            if (value != _controller.Settings.CheckUpdatesOnStart)
-                _controller.SetCheckUpdatesOnStart(value);
-        }
+        ToggleMaximize();
     }
 
-    private async void OnCheckUpdatesClick(object? sender, RoutedEventArgs e)
+    private static bool IsFromButton(object? source)
+        => source is Visual visual && visual.GetSelfAndVisualAncestors().OfType<Button>().Any();
+
+    private void OnMinimizeClick(object? sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+
+    private void OnMaximizeClick(object? sender, RoutedEventArgs e) => ToggleMaximize();
+
+    private void OnCloseClick(object? sender, RoutedEventArgs e) => Close();
+
+    private void ToggleMaximize()
+        => WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+
+    private void RefreshMaximizeIcon()
     {
-        if (!_controller.UpdatesEnabled)
-        {
-            UpdateInfoText.Text = "Atualizações automáticas indisponíveis nesta versão de desenvolvimento.";
-            return;
-        }
-
-        CheckUpdatesButton.IsEnabled = false;
-        UpdateInfoText.Text = "Procurando atualizações…";
-
-        var release = await _controller.CheckForUpdatesAsync();
-
-        CheckUpdatesButton.IsEnabled = true;
-        UpdateInfoText.Text = release is null
-            ? $"Você já está na versão mais recente ({_controller.AppVersion})."
-            : $"Nova versão v{release.Version} disponível.";
+        MaximizeIcon.Data = this.FindResource(
+            WindowState == WindowState.Maximized ? "IconWinRestore" : "IconWinMaximize") as Geometry;
     }
 
-    private async void OnUpdateClick(object? sender, RoutedEventArgs e)
-    {
-        UpdateButton.IsEnabled = false;
-        UpdateProgress.Value = 0;
-        UpdateProgress.IsVisible = true;
-
-        var progress = new Progress<double>(value => UpdateProgress.Value = value);
-        try
-        {
-            await _controller.InstallUpdateAsync(progress);
-        }
-        catch (Exception ex)
-        {
-            Log.Error("Falha ao atualizar o aplicativo.", ex);
-            UpdateButton.IsEnabled = true;
-            UpdateProgress.IsVisible = false;
-            UpdateInfoText.Text = $"Não foi possível atualizar: {ex.Message}";
-        }
-    }
-
-    // ---------------- Pares salvos ----------------
-
-    private void OnPairsToggleClick(object? sender, RoutedEventArgs e)
-    {
-        PairsPanel.IsVisible = !PairsPanel.IsVisible;
-        if (PairsPanel.IsVisible)
-            RefreshPairs();
-    }
-
-    private void RefreshPairs()
-    {
-        PairsList.Items.Clear();
-        IReadOnlyList<(string DeviceId, string DeviceName)> pairs;
-        try
-        {
-            pairs = _controller.Store?.List() ?? Array.Empty<(string DeviceId, string DeviceName)>();
-        }
-        catch (Exception ex)
-        {
-            Log.Error("Falha ao listar os pareamentos.", ex);
-            pairs = Array.Empty<(string DeviceId, string DeviceName)>();
-        }
-
-        foreach (var (deviceId, deviceName) in pairs)
-            PairsList.Items.Add(new PairItem(deviceId, deviceName));
-
-        PairsEmptyText.IsVisible = pairs.Count == 0;
-    }
-
-    private void OnForgetPairClick(object? sender, RoutedEventArgs e)
-    {
-        if (PairsList.SelectedItem is not PairItem item)
-            return;
-
-        try
-        {
-            _controller.Store?.Remove(item.DeviceId);
-        }
-        catch (Exception ex)
-        {
-            Log.Error("Falha ao esquecer o pareamento.", ex);
-            StatusText.Text = $"Não foi possível esquecer o pareamento: {ex.Message}";
-            return;
-        }
-
-        RefreshPairs();
-        RebuildPeers(_controller.SecondaryPeers);
-    }
-
-    // ---------------- Janela ----------------
-
+    /// <summary>Fechar a janela só esconde: o app continua na bandeja (exceto quando AllowClose foi chamado).</summary>
     private void OnWindowClosing(object? sender, WindowClosingEventArgs e)
     {
         if (_allowClose)
@@ -323,16 +473,5 @@ public partial class MainWindow : Window
 
         e.Cancel = true;
         Hide();
-    }
-
-    private sealed record PeerItem(PeerInfo Peer, bool Paired)
-    {
-        public override string ToString()
-            => Paired ? $"{Peer.Name} · {Peer.Address} · pareado" : $"{Peer.Name} · {Peer.Address}";
-    }
-
-    private sealed record PairItem(string DeviceId, string DeviceName)
-    {
-        public override string ToString() => DeviceName;
     }
 }

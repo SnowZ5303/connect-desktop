@@ -1,3 +1,6 @@
+using System.Buffers.Binary;
+using System.Security.Cryptography;
+using System.Text;
 using ConnectDesktop.Core.Layout;
 using ConnectDesktop.Core.Platform;
 using ConnectDesktop.Core.Protocol;
@@ -7,6 +10,8 @@ namespace ConnectDesktop.Core.Tests;
 
 public sealed class MessageCodecTests
 {
+    private static readonly Guid TransferA = Guid.Parse("11111111-2222-3333-4444-555555555555");
+
     public static IEnumerable<object[]> AllMessages() => new List<object[]>
     {
         new object[] { new MouseMoveMessage(-5, 300) },
@@ -26,7 +31,68 @@ public sealed class MessageCodecTests
         new object[] { new ScreenInfoMessage(1920, 1080) },
         new object[] { new PingMessage(long.MaxValue) },
         new object[] { new PongMessage(1234567890123L) },
+        new object[] { new FileOfferMessage(TransferA, "relatório ação.pdf", 123456789012L) },
+        new object[] { new FileOfferMessage(TransferA, "vazio.txt", 0L) },
+        new object[] { new FileChunkMessage(TransferA, 65536L, new byte[] { 1, 2, 3, 250, 255 }) },
+        new object[] { new FileChunkMessage(TransferA, 0L, Array.Empty<byte>()) },
+        new object[] { new FileDoneMessage(TransferA, SHA256.HashData(Encoding.UTF8.GetBytes("abc"))) },
+        new object[] { new FileCancelMessage(TransferA, "Cancelado pelo usuário.") },
+        new object[] { new FileResultMessage(TransferA, true, "") },
+        new object[] { new FileResultMessage(TransferA, false, "Disco cheio") },
     };
+
+    /// <summary>Compara por conteúdo: os records comparam byte[] por referência.</summary>
+    private static void AssertSameMessage(Message expected, Message actual)
+    {
+        switch (expected)
+        {
+            case FileChunkMessage e:
+                var chunk = Assert.IsType<FileChunkMessage>(actual);
+                Assert.Equal(e.TransferId, chunk.TransferId);
+                Assert.Equal(e.Offset, chunk.Offset);
+                Assert.Equal(e.Data, chunk.Data);
+                break;
+            case FileDoneMessage e:
+                var done = Assert.IsType<FileDoneMessage>(actual);
+                Assert.Equal(e.TransferId, done.TransferId);
+                Assert.Equal(e.Sha256, done.Sha256);
+                break;
+            default:
+                Assert.Equal(expected, actual);
+                break;
+        }
+    }
+
+    private static byte[] Bytes(params byte[][] parts)
+    {
+        var total = parts.Sum(p => p.Length);
+        var result = new byte[total];
+        var offset = 0;
+        foreach (var part in parts)
+        {
+            part.CopyTo(result, offset);
+            offset += part.Length;
+        }
+        return result;
+    }
+
+    private static byte[] Type(MessageType type) => new[] { (byte)type };
+
+    private static byte[] I32(int value)
+    {
+        var b = new byte[4];
+        BinaryPrimitives.WriteInt32LittleEndian(b, value);
+        return b;
+    }
+
+    private static byte[] I64(long value)
+    {
+        var b = new byte[8];
+        BinaryPrimitives.WriteInt64LittleEndian(b, value);
+        return b;
+    }
+
+    private static byte[] Ascii(int count, byte value = (byte)'a') => Enumerable.Repeat(value, count).ToArray();
 
     [Fact]
     public void AllMessages_cobrem_todos_os_tipos_do_enum()
@@ -42,7 +108,7 @@ public sealed class MessageCodecTests
     {
         var bytes = MessageCodec.Encode(message);
         var decoded = MessageCodec.Decode(bytes);
-        Assert.Equal(message, decoded);
+        AssertSameMessage(message, decoded);
     }
 
     [Theory]
@@ -136,5 +202,80 @@ public sealed class MessageCodecTests
                 // esperado para lixo
             }
         }
+    }
+
+    // ---- Transferência de arquivos: casos inválidos (bytes montados à mão, porque o Encode recusa alguns) ----
+
+    [Fact]
+    public void FileOffer_com_tamanho_de_nome_negativo_lanca_FormatException()
+    {
+        var raw = Bytes(Type(MessageType.FileOffer), TransferA.ToByteArray(), I32(-1), I64(0));
+        Assert.Throws<FormatException>(() => MessageCodec.Decode(raw));
+    }
+
+    [Fact]
+    public void FileOffer_com_nome_maior_que_o_restante_lanca_FormatException()
+    {
+        // Diz 500 bytes de nome, mas só sobram 3 bytes de nome + 8 de tamanho.
+        var raw = Bytes(Type(MessageType.FileOffer), TransferA.ToByteArray(), I32(500), Ascii(3), I64(0));
+        Assert.Throws<FormatException>(() => MessageCodec.Decode(raw));
+    }
+
+    [Fact]
+    public void FileOffer_com_nome_acima_de_MaxFileNameBytes_lanca_FormatException()
+    {
+        var max = FileTransferLimits.MaxFileNameBytes;
+        var raw = Bytes(Type(MessageType.FileOffer), TransferA.ToByteArray(), I32(max + 1), Ascii(max + 1), I64(10));
+        Assert.Throws<FormatException>(() => MessageCodec.Decode(raw));
+    }
+
+    [Fact]
+    public void FileOffer_com_bytes_sobrando_no_fim_lanca_FormatException()
+    {
+        var raw = Bytes(MessageCodec.Encode(new FileOfferMessage(TransferA, "a.txt", 3)), new byte[] { 0xFF });
+        Assert.Throws<FormatException>(() => MessageCodec.Decode(raw));
+    }
+
+    [Fact]
+    public void FileChunk_com_Data_acima_de_ChunkSize_lanca_FormatException()
+    {
+        var size = FileTransferLimits.ChunkSize + 1;
+        var raw = Bytes(Type(MessageType.FileChunk), TransferA.ToByteArray(), I64(0), I32(size), Ascii(size));
+        Assert.Throws<FormatException>(() => MessageCodec.Decode(raw));
+    }
+
+    [Fact]
+    public void FileChunk_com_bytes_sobrando_no_fim_lanca_FormatException()
+    {
+        var raw = Bytes(MessageCodec.Encode(new FileChunkMessage(TransferA, 0, new byte[] { 1, 2 })), new byte[] { 0x00 });
+        Assert.Throws<FormatException>(() => MessageCodec.Decode(raw));
+    }
+
+    [Fact]
+    public void FileDone_com_Sha256_diferente_de_32_bytes_lanca_FormatException()
+    {
+        var raw = Bytes(Type(MessageType.FileDone), TransferA.ToByteArray(), I32(31), Ascii(31));
+        Assert.Throws<FormatException>(() => MessageCodec.Decode(raw));
+    }
+
+    [Fact]
+    public void FileDone_com_bytes_sobrando_no_fim_lanca_FormatException()
+    {
+        var raw = Bytes(MessageCodec.Encode(new FileDoneMessage(TransferA, new byte[32])), new byte[] { 0x01 });
+        Assert.Throws<FormatException>(() => MessageCodec.Decode(raw));
+    }
+
+    [Fact]
+    public void FileCancel_com_motivo_de_tamanho_negativo_lanca_FormatException()
+    {
+        var raw = Bytes(Type(MessageType.FileCancel), TransferA.ToByteArray(), I32(-1));
+        Assert.Throws<FormatException>(() => MessageCodec.Decode(raw));
+    }
+
+    [Fact]
+    public void FileResult_com_bytes_sobrando_no_fim_lanca_FormatException()
+    {
+        var raw = Bytes(MessageCodec.Encode(new FileResultMessage(TransferA, true, "")), new byte[] { 0xFF });
+        Assert.Throws<FormatException>(() => MessageCodec.Decode(raw));
     }
 }

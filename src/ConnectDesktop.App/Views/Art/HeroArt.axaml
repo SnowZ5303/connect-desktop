@@ -1,0 +1,81 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="ConnectDesktop.App.Views.Art.HeroArt">
+  <!-- Ilustração vetorial do cabeçalho: notebook e monitor com cursores, arcos de sinal com brilho
+       e faixa de luz curva. Tudo em Path/Rectangle com cores do tema (sem bitmaps). Referência 320x150. -->
+  <Canvas Width="320" Height="150">
+
+    <!-- Faixa curva de luz embaixo: gradiente do destaque para transparente -->
+    <Path Data="M0,126 C90,92 210,88 320,124 L320,150 L0,150 Z" Opacity="0.9">
+      <Path.Fill>
+        <LinearGradientBrush StartPoint="50%,0%" EndPoint="50%,100%">
+          <GradientStop Color="{DynamicResource SystemAccentColor}" Offset="0" />
+          <GradientStop Color="#00000000" Offset="1" />
+        </LinearGradientBrush>
+      </Path.Fill>
+    </Path>
+    <Path Data="M20,134 C110,104 214,100 304,130" Stroke="{DynamicResource AccentBrush}"
+          StrokeThickness="2.2" StrokeLineCap="Round">
+      <Path.Effect>
+        <DropShadowEffect Color="{DynamicResource SystemAccentColor}" BlurRadius="10" Opacity="0.9" />
+      </Path.Effect>
+    </Path>
+
+    <!-- Arcos de sinal entre os dois aparelhos, com brilho -->
+    <Path Data="M100,64 C110,36 134,22 164,22" Stroke="{DynamicResource AccentBrush}"
+          StrokeThickness="2.4" StrokeLineCap="Round">
+      <Path.Effect>
+        <DropShadowEffect Color="{DynamicResource SystemAccentColor}" BlurRadius="8" Opacity="0.9" />
+      </Path.Effect>
+    </Path>
+    <Path Data="M110,80 C122,62 140,52 162,50" Stroke="{DynamicResource AccentBrush}"
+          StrokeThickness="2" StrokeLineCap="Round" Opacity="0.8">
+      <Path.Effect>
+        <DropShadowEffect Color="{DynamicResource SystemAccentColor}" BlurRadius="7" Opacity="0.8" />
+      </Path.Effect>
+    </Path>
+    <Path Data="M118,94 C128,84 140,80 152,80" Stroke="{DynamicResource AccentBrush}"
+          StrokeThickness="1.8" StrokeLineCap="Round" Opacity="0.55">
+      <Path.Effect>
+        <DropShadowEffect Color="{DynamicResource SystemAccentColor}" BlurRadius="6" Opacity="0.7" />
+      </Path.Effect>
+    </Path>
+
+    <!-- Monitor: tela com leve gradiente e brilho na borda -->
+    <Rectangle Canvas.Left="168" Canvas.Top="12" Width="136" Height="88" RadiusX="8" RadiusY="8"
+               Stroke="{DynamicResource AccentBrush}" StrokeThickness="2.5">
+      <Rectangle.Fill>
+        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+          <GradientStop Color="{DynamicResource SystemAccentColor}" Offset="0" />
+          <GradientStop Color="{DynamicResource SystemAccentColorDark2}" Offset="1" />
+        </LinearGradientBrush>
+      </Rectangle.Fill>
+      <Rectangle.Effect>
+        <DropShadowEffect Color="{DynamicResource SystemAccentColor}" BlurRadius="12" Opacity="0.6" />
+      </Rectangle.Effect>
+    </Rectangle>
+    <Path Data="M226,100 V116 M200,118 H252" Stroke="{DynamicResource AccentBrush}"
+          StrokeThickness="2.5" StrokeLineCap="Round" />
+    <Path Canvas.Left="218" Canvas.Top="34"
+          Data="M0,0 L0,18 L4.8,13.6 L8.2,21 L11.4,19.6 L8,12.4 L14.6,12.4 Z"
+          Fill="{DynamicResource TextPrimaryBrush}" />
+
+    <!-- Notebook -->
+    <Rectangle Canvas.Left="58" Canvas.Top="58" Width="98" Height="60" RadiusX="6" RadiusY="6"
+               Stroke="{DynamicResource AccentBrush}" StrokeThickness="2.5">
+      <Rectangle.Fill>
+        <LinearGradientBrush StartPoint="0%,0%" EndPoint="0%,100%">
+          <GradientStop Color="{DynamicResource SystemAccentColor}" Offset="0" />
+          <GradientStop Color="{DynamicResource SystemAccentColorDark2}" Offset="1" />
+        </LinearGradientBrush>
+      </Rectangle.Fill>
+      <Rectangle.Effect>
+        <DropShadowEffect Color="{DynamicResource SystemAccentColor}" BlurRadius="10" Opacity="0.5" />
+      </Rectangle.Effect>
+    </Rectangle>
+    <Path Data="M42,122 H172 L163,132 H51 Z" Fill="{DynamicResource AccentBrush}" />
+    <Path Canvas.Left="100" Canvas.Top="72"
+          Data="M0,0 L0,16 L4,12.2 L6.8,18.4 L9.4,17.3 L6.6,11.2 L12,11.2 Z"
+          Fill="{DynamicResource TextPrimaryBrush}" />
+  </Canvas>
+</UserControl>

@@ -1,0 +1,44 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:s="using:ConnectDesktop.App.Services"
+             x:Class="ConnectDesktop.App.Views.AboutView">
+  <UserControl.Styles>
+  </UserControl.Styles>
+
+  <ScrollViewer>
+    <StackPanel Spacing="16" Margin="0,0,8,0">
+
+      <StackPanel Spacing="4">
+        <TextBlock Text="{s:Tr about.title}" FontSize="24" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
+        <TextBlock Text="{s:Tr about.subtitle}" Foreground="{DynamicResource TextSecondaryBrush}" />
+      </StackPanel>
+
+      <Border Classes="card">
+        <StackPanel Spacing="14" HorizontalAlignment="Center" Margin="0,8">
+
+          <Path Classes="icon accent" Data="{StaticResource IconLink}" Width="64" Height="64" Stretch="Uniform" HorizontalAlignment="Center" />
+
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="10">
+            <TextBlock Text="Connect Desktop" FontSize="24" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
+            <Border CornerRadius="10" Padding="8,2" Background="{DynamicResource AccentSoftBrush}" VerticalAlignment="Center">
+              <TextBlock x:Name="VersionText" Foreground="{DynamicResource AccentBrush}" FontSize="12" />
+            </Border>
+          </StackPanel>
+
+          <TextBlock Text="{s:Tr about.description}" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="420"
+                     Foreground="{DynamicResource TextSecondaryBrush}" />
+
+          <Button x:Name="RepoButton" Classes="link" HorizontalAlignment="Center" Content="https://github.com/SnowZ5303/connect-desktop" />
+
+          <TextBlock Text="{s:Tr about.license}" HorizontalAlignment="Center" Foreground="{DynamicResource TextPrimaryBrush}" />
+          <TextBlock Text="{s:Tr about.credits}" HorizontalAlignment="Center" Foreground="{DynamicResource TextSecondaryBrush}" />
+
+          <Button x:Name="CheckUpdatesButton" Classes="primary" HorizontalAlignment="Center" Content="{s:Tr about.checkUpdates}" />
+          <TextBlock x:Name="UpdateResultText" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap"
+                     Foreground="{DynamicResource TextSecondaryBrush}" />
+        </StackPanel>
+      </Border>
+
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

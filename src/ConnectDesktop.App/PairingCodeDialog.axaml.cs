@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Interactivity;
+using ConnectDesktop.App.Services;
 
 namespace ConnectDesktop.App;
 
@@ -45,7 +46,7 @@ public partial class PairingCodeDialog : Window
         var digits = new string(text.Where(c => char.IsDigit(c)).ToArray());
         if (digits.Length != CodeLength)
         {
-            ErrorText.Text = "Digite os 6 números do código.";
+            ErrorText.Text = Loc.Instance["dialog.pair_digits"];
             ErrorText.IsVisible = true;
             return;
         }

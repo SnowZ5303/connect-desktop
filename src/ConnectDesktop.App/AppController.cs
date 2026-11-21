@@ -2,12 +2,14 @@ using System.Diagnostics;
 using System.Reflection;
 using Avalonia.Controls;
 using Avalonia.Threading;
+using ConnectDesktop.App.Services;
 using ConnectDesktop.Core.Layout;
 using ConnectDesktop.Core.Net;
 using ConnectDesktop.Core.Platform;
 using ConnectDesktop.Core.Security;
 using ConnectDesktop.Core.Session;
 using ConnectDesktop.Core.Settings;
+using ConnectDesktop.Core.Transfer;
 using ConnectDesktop.Core.Update;
 
 namespace ConnectDesktop.App;
@@ -24,6 +26,17 @@ public sealed class AppController
     private static readonly TimeSpan HandshakeRenewInterval = TimeSpan.FromSeconds(3);
     private const string WrongCodeMessage = "Código de pareamento incorreto.";
 
+    /// <summary>Mensagens fixas do Core (em português) e a chave de tradução de cada uma.</summary>
+    private static readonly Dictionary<string, string> CoreMessageKeys = new()
+    {
+        ["Este PC não reconhece mais o pareamento. Pareie de novo."] = "err.not_recognized",
+        ["Código de pareamento incorreto."] = "err.wrong_code",
+        ["O outro PC não confirmou a identidade."] = "err.not_confirmed",
+        ["Pareamento cancelado."] = "err.cancelled",
+        ["O outro PC não reconhece este pareamento. Esqueça o pareamento em 'Pares salvos' e conecte de novo para parear com código."] = "err.unknown_pairing",
+        ["Pareamento recusado pelo outro PC."] = "err.refused",
+    };
+
     private DateTime _lastHandshakeRenewUtc = DateTime.MinValue;
 
     private readonly DispatcherTimer _codeTimer;
@@ -39,6 +52,7 @@ public sealed class AppController
     private ClipboardSync? _primaryClipboard;
     private string? _primaryPeerId;
     private string? _primaryPeerName;
+    private PeerInfo? _primaryPeer;
     private bool _connecting;
     private bool _autoReconnectSuppressed;
     private DateTime _lastAutoAttemptUtc = DateTime.MinValue;
@@ -57,12 +71,22 @@ public sealed class AppController
         AppVersion = ComputeVersion();
         Settings = LoadSettings();
         Store = CreateStore();
+        Files = new FileTransferService(EffectiveDownloadDir());
 
         _codeTimer = new DispatcherTimer { Interval = CodeRenewInterval };
         _codeTimer.Tick += (_, _) => RenewPairingCode();
 
         _reconnectTimer = new DispatcherTimer { Interval = ReconnectInterval };
         _reconnectTimer.Tick += (_, _) => TryAutoReconnect();
+
+        // Qualquer mudança de estado avisa a janela por StateChanged.
+        StatusChanged += _ => RaiseStateChanged();
+        PairingCodeChanged += _ => RaiseStateChanged();
+        PeersChanged += _ => RaiseStateChanged();
+        ConnectionChanged += RaiseStateChanged;
+        WarningChanged += (_, _) => RaiseStateChanged();
+        UpdateAvailable += _ => RaiseStateChanged();
+        Loc.Instance.LanguageChanged += OnLanguageChanged;
     }
 
     /// <summary>Configurações carregadas (a UI lê daqui).</summary>
@@ -70,6 +94,9 @@ public sealed class AppController
 
     /// <summary>Pareamentos salvos. Null se o armazenamento não pôde ser aberto.</summary>
     public PairingStore? Store { get; }
+
+    /// <summary>Envio e recebimento de arquivos (compartilhado pelas sessões).</summary>
+    public FileTransferService Files { get; }
 
     /// <summary>Versão "Major.Minor.Build" do assembly de entrada.</summary>
     public string AppVersion { get; }
@@ -104,6 +131,35 @@ public sealed class AppController
 
     public string? ConnectedPeerId => _primarySession is null ? null : _primaryPeerId;
 
+    /// <summary>PC principal conectado (só no papel principal), ou null.</summary>
+    public PeerInfo? ConnectedPeer => _primarySession is null ? null : _primaryPeer;
+
+    /// <summary>true quando o PC secundário está com uma sessão aberta.</summary>
+    public bool IsSecondaryConnected => _secondarySession is not null;
+
+    /// <summary>Nome do outro PC na sessão atual (principal ou secundário), ou null.</summary>
+    public string? ConnectedPeerName
+        => _primarySession is not null ? _primaryPeerName
+           : _secondarySession is not null ? _secondaryPeerName
+           : null;
+
+    /// <summary>Todos os PCs encontrados na rede, com o papel de cada um.</summary>
+    public IReadOnlyList<PeerInfo> AllPeers
+    {
+        get
+        {
+            try
+            {
+                return _discovery?.Peers ?? Array.Empty<PeerInfo>();
+            }
+            catch (Exception ex)
+            {
+                Log.Error("Falha ao ler os PCs encontrados.", ex);
+                return Array.Empty<PeerInfo>();
+            }
+        }
+    }
+
     /// <summary>Status em texto para a linha de status da janela (papel atual).</summary>
     public event Action<string>? StatusChanged;
     /// <summary>Código de pareamento atual do PC secundário (null = nenhum).</summary>
@@ -116,6 +172,8 @@ public sealed class AppController
     public event Action<string?, bool>? WarningChanged;
     /// <summary>Nova versão encontrada no GitHub.</summary>
     public event Action<ReleaseInfo>? UpdateAvailable;
+    /// <summary>Qualquer mudança (status, PCs, conexão, código, pareamentos, configurações). Sempre na thread da UI.</summary>
+    public event Action? StateChanged;
 
     /// <summary>Carrega serviços conforme o papel salvo. Chamar uma vez, com a janela já criada.</summary>
     public void Start()
@@ -128,7 +186,7 @@ public sealed class AppController
         }
         catch (Exception ex)
         {
-            ReportError("iniciar neste sistema", ex);
+            ReportError("err.act.start_system", ex);
             return;
         }
 
@@ -142,6 +200,14 @@ public sealed class AppController
     public async Task ShutdownAsync()
     {
         await StopServicesAsync();
+        try
+        {
+            Files.Dispose();
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Falha ao encerrar a transferência de arquivos.", ex);
+        }
         Log.Info("Connect Desktop encerrado.");
     }
 
@@ -218,6 +284,75 @@ public sealed class AppController
         SaveSettings();
     }
 
+    /// <summary>Modo ("System", "Light" ou "Dark") e cor de destaque ("#RRGGBB"). Aplica na hora.</summary>
+    public void SetTheme(string mode, string accentHex)
+    {
+        Settings.ThemeMode = mode;
+        Settings.AccentColor = accentHex;
+        SaveSettings();
+        try
+        {
+            ThemeService.Apply(mode, accentHex);
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Falha ao aplicar o tema.", ex);
+        }
+        RaiseStateChanged();
+    }
+
+    /// <summary>Idioma: "pt-BR", "en", "es", ou "" para o idioma do sistema. Aplica na hora.</summary>
+    public void SetLanguage(string code)
+    {
+        Settings.Language = code;
+        SaveSettings();
+        Loc.Instance.SetLanguage(code);
+        RaiseStateChanged();
+    }
+
+    /// <summary>Abrir com o sistema (e se abre só na bandeja).</summary>
+    public void SetStartup(bool withSystem, bool minimized)
+    {
+        Settings.StartWithSystem = withSystem;
+        Settings.StartMinimized = minimized;
+        SaveSettings();
+        if (!StartupService.SetEnabled(withSystem, minimized))
+            Log.Info("Não foi possível alterar a inicialização com o sistema.");
+        RaiseStateChanged();
+    }
+
+    /// <summary>Pasta de downloads de arquivos recebidos. "" = pasta padrão.</summary>
+    public void SetDownloadDir(string dir)
+    {
+        Settings.DownloadDir = dir.Trim();
+        SaveSettings();
+        try
+        {
+            Files.DownloadDir = EffectiveDownloadDir();
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Falha ao trocar a pasta de downloads.", ex);
+        }
+        RaiseStateChanged();
+    }
+
+    /// <summary>Esquece um pareamento salvo.</summary>
+    public void ForgetPair(string deviceId)
+    {
+        try
+        {
+            Store?.Remove(deviceId);
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Falha ao esquecer o pareamento.", ex);
+            StatusChanged?.Invoke(Loc.Instance.Format("err.forget_failed", Describe(ex)));
+            return;
+        }
+        RaiseStateChanged();
+    }
+
     private bool IsSessionActive => _primarySession is not null || _secondarySession is not null;
 
     private void StartServices()
@@ -237,7 +372,7 @@ public sealed class AppController
         catch (Exception ex)
         {
             DisposeDiscovery();
-            ReportError("iniciar a descoberta na rede", ex);
+            ReportError("err.act.discovery", ex);
         }
 
         if (Settings.Role == DeviceRole.Secondary)
@@ -252,7 +387,7 @@ public sealed class AppController
         {
             var store = Store;
             if (store is null)
-                throw new InvalidOperationException("o armazenamento de pareamentos não está disponível");
+                throw new InvalidOperationException(Loc.Instance["err.store_short"]);
 
             RenewPairingCode();
             _codeTimer.Start();
@@ -266,7 +401,7 @@ public sealed class AppController
         }
         catch (Exception ex)
         {
-            ReportError("iniciar o modo secundário", ex);
+            ReportError("err.act.secondary", ex);
         }
     }
 
@@ -333,7 +468,7 @@ public sealed class AppController
             if (!platform.CheckPermissions(out var message))
             {
                 _permissionMessage = string.IsNullOrWhiteSpace(message)
-                    ? "Permissões insuficientes para compartilhar o teclado e o mouse."
+                    ? Loc.Instance["err.perm_default"]
                     : message;
                 WarningChanged?.Invoke(_permissionMessage, true);
                 return false;
@@ -345,7 +480,7 @@ public sealed class AppController
         catch (Exception ex)
         {
             Log.Error("Falha ao verificar as permissões.", ex);
-            _permissionMessage = $"Não foi possível verificar as permissões: {Describe(ex)}";
+            _permissionMessage = Loc.Instance.Format("err.perm_check", Describe(ex));
             WarningChanged?.Invoke(_permissionMessage, true);
             return false;
         }
@@ -362,7 +497,7 @@ public sealed class AppController
         }
         catch (Exception ex)
         {
-            ReportError("gerar o código de pareamento", ex);
+            ReportError("err.act.pairing_code", ex);
         }
     }
 
@@ -379,7 +514,7 @@ public sealed class AppController
         }
 
         if (_secondarySession is null)
-            StatusChanged?.Invoke(message);
+            StatusChanged?.Invoke(LocalizeError(message));
     }
 
     private void OnChannelAccepted(IMessageChannel channel)
@@ -389,7 +524,7 @@ public sealed class AppController
         {
             _ = SafeDisposeAsync(channel);
             if (Settings.Role == DeviceRole.Secondary && !_permissionsOk)
-                StatusChanged?.Invoke(_permissionMessage ?? "Permissões pendentes para receber o teclado e o mouse.");
+                StatusChanged?.Invoke(_permissionMessage ?? Loc.Instance["status.perm_pending_secondary"]);
             return;
         }
 
@@ -408,6 +543,7 @@ public sealed class AppController
                     UpdateSecondaryStatus();
             });
             session.Ended += () => Dispatcher.UIThread.Post(() => OnSecondaryEnded(session));
+            session.Files = Files;
 
             _secondarySession = session;
             _secondaryClipboard = clipboard;
@@ -427,7 +563,7 @@ public sealed class AppController
             {
                 _ = DisposeSecondarySessionAsync();
             }
-            ReportError("aceitar a conexão", ex);
+            ReportError("err.act.accept", ex);
         }
     }
 
@@ -447,12 +583,14 @@ public sealed class AppController
         var session = _secondarySession;
         if (session is null)
         {
-            StatusChanged?.Invoke("Aguardando o PC principal…");
+            StatusChanged?.Invoke(Loc.Instance["status.waiting_primary"]);
             return;
         }
 
-        var name = _secondaryPeerName ?? "PC principal";
-        StatusChanged?.Invoke(session.IsActive ? $"Controlado por {name}" : $"Conectado a {name}");
+        var name = _secondaryPeerName ?? Loc.Instance["conn.default_primary"];
+        StatusChanged?.Invoke(session.IsActive
+            ? Loc.Instance.Format("status.controlled_by", name)
+            : Loc.Instance.Format("status.connected_to", name));
     }
 
     private async Task DisposeSecondarySessionAsync()
@@ -548,7 +686,7 @@ public sealed class AppController
         if (!_permissionsOk)
         {
             if (!automatic)
-                StatusChanged?.Invoke(_permissionMessage ?? "Permissões pendentes para compartilhar o teclado e o mouse.");
+                StatusChanged?.Invoke(_permissionMessage ?? Loc.Instance["status.perm_pending_primary"]);
             return;
         }
 
@@ -557,7 +695,7 @@ public sealed class AppController
         if (store is null)
         {
             if (!automatic)
-                StatusChanged?.Invoke("Não é possível conectar: o armazenamento de pareamentos não está disponível.");
+                StatusChanged?.Invoke(Loc.Instance["err.store_unavailable"]);
             return;
         }
 
@@ -570,7 +708,7 @@ public sealed class AppController
 
         _connecting = true;
         if (!automatic)
-            StatusChanged?.Invoke($"Conectando a {peer.Name}…");
+            StatusChanged?.Invoke(Loc.Instance.Format("status.connecting", peer.Name));
 
         try
         {
@@ -581,13 +719,13 @@ public sealed class AppController
         {
             Log.Error($"Pareamento não concluído com {peer.Name}.", ex);
             if (!automatic)
-                StatusChanged?.Invoke(ex.Message);
+                StatusChanged?.Invoke(LocalizeError(ex.Message));
         }
         catch (Exception ex)
         {
             Log.Error($"Falha ao conectar a {peer.Name}.", ex);
             if (!automatic)
-                StatusChanged?.Invoke($"Não foi possível conectar: {Describe(ex)}");
+                StatusChanged?.Invoke(Loc.Instance.Format("err.connect_failed", Describe(ex)));
         }
         finally
         {
@@ -618,12 +756,14 @@ public sealed class AppController
                     UpdatePrimaryStatus();
             });
             session.Ended += () => Dispatcher.UIThread.Post(() => OnPrimaryEnded(session));
+            session.Files = Files;
 
             _primarySession = session;
             _capture = capture;
             _primaryClipboard = clipboard;
             _primaryPeerId = peer.Id;
             _primaryPeerName = peer.Name;
+            _primaryPeer = peer;
             session.Start();
 
             Settings.LastPeerId = peer.Id;
@@ -664,12 +804,14 @@ public sealed class AppController
         var session = _primarySession;
         if (session is null)
         {
-            StatusChanged?.Invoke("Procurando PCs na rede…");
+            StatusChanged?.Invoke(Loc.Instance["status.searching"]);
             return;
         }
 
-        var name = _primaryPeerName ?? "PC secundário";
-        StatusChanged?.Invoke(session.State == PrimaryState.Remote ? $"Controlando {name}" : $"Conectado a {name}");
+        var name = _primaryPeerName ?? Loc.Instance["conn.default_secondary"];
+        StatusChanged?.Invoke(session.State == PrimaryState.Remote
+            ? Loc.Instance.Format("status.controlling", name)
+            : Loc.Instance.Format("status.connected_to", name));
     }
 
     private void OnPrimaryEnded(PrimarySession? session)
@@ -693,6 +835,7 @@ public sealed class AppController
         _primaryClipboard = null;
         _primaryPeerId = null;
         _primaryPeerName = null;
+        _primaryPeer = null;
 
         if (session is null && capture is null && clipboard is null)
             return;
@@ -784,7 +927,7 @@ public sealed class AppController
     /// </summary>
     public async Task InstallUpdateAsync(IProgress<double> progress)
     {
-        var release = _pendingUpdate ?? throw new InvalidOperationException("Nenhuma atualização disponível.");
+        var release = _pendingUpdate ?? throw new InvalidOperationException(Loc.Instance["update.none"]);
 
         if (OperatingSystem.IsWindows())
         {
@@ -814,14 +957,39 @@ public sealed class AppController
     private IPlatform RequirePlatform()
         => _platform ?? throw new InvalidOperationException("a plataforma deste sistema não foi iniciada");
 
-    private void ReportError(string action, Exception ex)
+    /// <param name="actionKey">Chave Loc do que falhou (ex.: err.act.discovery).</param>
+    private void ReportError(string actionKey, Exception ex)
     {
-        Log.Error($"Falha ao {action}.", ex);
-        StatusChanged?.Invoke($"Não foi possível {action}: {Describe(ex)}");
+        Log.Error($"Falha ({actionKey}).", ex);
+        StatusChanged?.Invoke(Loc.Instance.Format("err.report", Loc.Instance[actionKey], Describe(ex)));
     }
 
     private static string Describe(Exception ex)
-        => ex is NotImplementedException ? "recurso ainda não disponível nesta versão" : ex.Message;
+        => ex is NotImplementedException ? Loc.Instance["err.not_available"] : LocalizeError(ex.Message);
+
+    /// <summary>Mensagem do Core no idioma atual, quando conhecida; senão a original.</summary>
+    private static string LocalizeError(string message)
+        => CoreMessageKeys.TryGetValue(message, out var key) ? Loc.Instance[key] : message;
+
+    private void RaiseStateChanged()
+    {
+        if (Dispatcher.UIThread.CheckAccess())
+            StateChanged?.Invoke();
+        else
+            Dispatcher.UIThread.Post(() => StateChanged?.Invoke());
+    }
+
+    private void OnLanguageChanged()
+    {
+        if (Settings.Role == DeviceRole.Secondary)
+            UpdateSecondaryStatus();
+        else
+            UpdatePrimaryStatus();
+        RaiseStateChanged();
+    }
+
+    private string EffectiveDownloadDir()
+        => string.IsNullOrWhiteSpace(Settings.DownloadDir) ? FileTransferService.DefaultDownloadDir : Settings.DownloadDir;
 
     private static string ComputeVersion()
     {

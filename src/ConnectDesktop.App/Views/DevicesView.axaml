@@ -1,0 +1,70 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:s="using:ConnectDesktop.App.Services"
+             x:Class="ConnectDesktop.App.Views.DevicesView">
+  <UserControl.Styles>
+    <Style Selector="Border.row">
+      <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="12" />
+      <Setter Property="Padding" Value="16,14" />
+    </Style>
+    <Style Selector="Border.badge">
+      <Setter Property="Background" Value="{DynamicResource AccentSoftBrush}" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="Padding" Value="8,2" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBlock.badge">
+      <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+      <Setter Property="FontSize" Value="12" />
+    </Style>
+    <Style Selector="TextBlock.rowTitle">
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="FontSize" Value="15" />
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    </Style>
+  </UserControl.Styles>
+
+  <ScrollViewer>
+    <StackPanel Spacing="16" Margin="0,0,8,0">
+
+      <StackPanel Spacing="4">
+        <TextBlock Text="{s:Tr devices.title}" Classes="heading" />
+        <TextBlock Text="{s:Tr devices.subtitle}" Classes="muted" />
+      </StackPanel>
+
+      <!-- Este PC -->
+      <Border Classes="card">
+        <StackPanel Orientation="Horizontal" Spacing="12">
+          <Path Classes="icon accent" Data="{StaticResource IconDevices}" VerticalAlignment="Center" />
+          <TextBlock Text="{s:Tr devices.thisPc}" Classes="title" VerticalAlignment="Center" />
+          <TextBlock x:Name="ThisPcText" Classes="muted" VerticalAlignment="Center" />
+        </StackPanel>
+      </Border>
+
+      <!-- Estado vazio -->
+      <Border x:Name="EmptyPanel" Classes="card" IsVisible="False">
+        <StackPanel Spacing="10" HorizontalAlignment="Center" Margin="0,16">
+          <Border Width="96" Height="96" CornerRadius="48" HorizontalAlignment="Center"
+                  Background="{DynamicResource AccentSoftBrush}" BorderBrush="{DynamicResource AccentBrush}" BorderThickness="2">
+            <Path Classes="icon accent" Data="{StaticResource IconDevices}" Width="44" Height="44" Stretch="Uniform"
+                  HorizontalAlignment="Center" VerticalAlignment="Center" />
+          </Border>
+          <TextBlock Text="{s:Tr devices.emptyTitle}" FontSize="16" FontWeight="SemiBold" HorizontalAlignment="Center" />
+          <TextBlock Text="{s:Tr devices.emptyHint}" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="380"
+                     HorizontalAlignment="Center" Classes="muted" />
+        </StackPanel>
+      </Border>
+
+      <!-- Lista de PCs -->
+      <StackPanel x:Name="PeersPanel" Spacing="10">
+        <TextBlock x:Name="OnlyPrimaryHint" Text="{s:Tr devices.onlyPrimaryHint}" TextWrapping="Wrap"
+                   Classes="muted" IsVisible="False" />
+        <StackPanel x:Name="PeersList" Spacing="10" />
+      </StackPanel>
+
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

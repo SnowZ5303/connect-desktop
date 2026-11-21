@@ -4,6 +4,17 @@ Compartilhe o mouse e o teclado entre dois computadores na mesma rede. Encoste o
 
 Feito em .NET 8 com Avalonia. Funciona no Windows, macOS e Linux (sessão Xorg).
 
+![Tela do Connect Desktop](docs/screenshot.png)
+
+## Recursos
+
+- Mouse e teclado do PC principal controlando o secundário, pela borda da tela (esquerda, direita, acima ou abaixo).
+- Área de transferência compartilhada (texto).
+- **Transferência de arquivos** nos dois sentidos: arraste para a janela ou use "Enviar arquivos…". Eles chegam em `Downloads/Connect Desktop`, com verificação de integridade (SHA-256).
+- Conexão cifrada (ECDH + AES-GCM) e pareamento por código de 6 dígitos.
+- Interface em **português, inglês e espanhol**, tema claro/escuro e cor de destaque.
+- Abrir com o sistema (opcionalmente minimizado na bandeja) e atualização automática pelo GitHub Releases.
+
 ## Como instalar
 
 Baixe o arquivo da versão mais recente na página de [Releases](https://github.com/SnowZ5303/connect-desktop/releases/latest):
@@ -19,7 +30,7 @@ Instale o app nos dois computadores.
 1. Abra o Connect Desktop nos dois PCs.
 2. No PC que tem o mouse e o teclado que você quer usar, escolha **principal**. No outro, escolha **secundário**.
 3. Um dos PCs mostra um código de 6 dígitos. Digite esse código no outro.
-4. Escolha de qual lado da tela o secundário fica (esquerda ou direita).
+4. No PC principal, escolha de qual lado da tela o secundário fica (esquerda, direita, acima ou abaixo).
 5. Pronto. Ao encostar o mouse na borda desse lado, o controle passa para o outro PC.
 
 Para voltar o controle para o PC principal na hora, pressione **Ctrl+Alt+Esc**.

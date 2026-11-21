@@ -37,12 +37,12 @@ Name: "{group}\Connect Desktop"; Filename: "{app}\ConnectDesktop.exe"
 Name: "{autodesktop}\Connect Desktop"; Filename: "{app}\ConnectDesktop.exe"; Tasks: desktopicon
 
 [Registry]
-Root: HKA; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "Connect Desktop"; ValueData: """{app}\ConnectDesktop.exe"""; Flags: uninsdeletevalue; Tasks: startwithwindows
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "ConnectDesktop"; ValueData: """{app}\ConnectDesktop.exe"" --minimized"; Flags: uninsdeletevalue; Tasks: startwithwindows
 
 [Run]
 Filename: "netsh"; Parameters: "advfirewall firewall delete rule name=""Connect Desktop"""; Flags: runhidden waituntilterminated
 Filename: "netsh"; Parameters: "advfirewall firewall add rule name=""Connect Desktop"" dir=in action=allow program=""{app}\ConnectDesktop.exe"" enable=yes profile=any"; Flags: runhidden waituntilterminated
-Filename: "{app}\ConnectDesktop.exe"; Description: "Abrir Connect Desktop"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\ConnectDesktop.exe"; Description: "Abrir Connect Desktop"; Flags: nowait postinstall skipifsilent runasoriginaluser
 Filename: "{app}\ConnectDesktop.exe"; Flags: nowait runasoriginaluser; Check: WizardSilent
 
 [UninstallRun]

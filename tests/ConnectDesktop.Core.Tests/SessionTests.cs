@@ -2,6 +2,7 @@ using ConnectDesktop.Core.Layout;
 using ConnectDesktop.Core.Platform;
 using ConnectDesktop.Core.Session;
 using ConnectDesktop.Core.Tests.Fakes;
+using ConnectDesktop.Core.Transfer;
 using Xunit;
 
 namespace ConnectDesktop.Core.Tests;
@@ -274,5 +275,44 @@ public sealed class SessionTests
                                && HasAction(rig.Injector, new KeyAction(HidA, false)),
             what: "canal fechado soltou botão e tecla");
         await Wait.Until(() => !rig.Secondary.IsActive, what: "secundário inativo");
+    }
+
+    [Fact]
+    public async Task Arquivo_enviado_pelo_principal_chega_ao_Files_do_secundario_e_IsConnected_cai_ao_fechar()
+    {
+        using var temp = new TempDir();
+        var sourcePath = temp.File("origem.txt");
+        File.WriteAllText(sourcePath, "conteúdo via sessão");
+        var secondaryDir = temp.File("recebidos");
+
+        await using var pair = new FakeChannelPair();
+        using var filesPrimary = new FileTransferService(temp.File("enviados"));
+        using var filesSecondary = new FileTransferService(secondaryDir);
+
+        await using var primary = new PrimarySession(pair.A, new FakeCapture(), new FakeScreen(), ScreenSide.Right, null)
+        {
+            Files = filesPrimary,
+        };
+        await using var secondary = new SecondarySession(pair.B, new FakeInjector(), new FakeScreen(), null)
+        {
+            Files = filesSecondary,
+        };
+
+        secondary.Start();
+        primary.Start();
+        await Wait.Until(() => filesPrimary.IsConnected && filesSecondary.IsConnected, what: "Files ligados ao canal");
+
+        var id = filesPrimary.SendFile(sourcePath);
+
+        await Wait.Until(() => filesSecondary.Transfers.Any(t => t.Id == id && t.State == TransferState.Completed),
+            what: "arquivo recebido pelo secundário");
+        var received = filesSecondary.Transfers.First(t => t.Id == id);
+        Assert.Equal("origem.txt", received.FileName);
+        Assert.Equal(File.ReadAllBytes(sourcePath), File.ReadAllBytes(received.LocalPath!));
+
+        // Fechar o canal: os dois serviços deixam de estar conectados.
+        await pair.B.DisposeAsync();
+        await Wait.Until(() => !filesSecondary.IsConnected, what: "IsConnected do secundário virou false");
+        await Wait.Until(() => !filesPrimary.IsConnected, what: "IsConnected do principal virou false");
     }
 }

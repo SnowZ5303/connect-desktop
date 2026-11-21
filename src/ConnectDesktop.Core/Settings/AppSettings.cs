@@ -44,6 +44,18 @@ public sealed class AppSettings
     public bool ShareClipboard { get; set; } = true;
     public bool CheckUpdatesOnStart { get; set; } = true;
 
+    // ---- v1.0.2 (interface nova) ----
+    /// <summary>"" = idioma do sistema; senão "pt-BR", "en" ou "es".</summary>
+    public string Language { get; set; } = "";
+    /// <summary>"System", "Light" ou "Dark".</summary>
+    public string ThemeMode { get; set; } = "System";
+    /// <summary>Cor de destaque em hexadecimal "#RRGGBB". Padrão azul.</summary>
+    public string AccentColor { get; set; } = "#2563EB";
+    public bool StartWithSystem { get; set; } = false;
+    public bool StartMinimized { get; set; } = false;
+    /// <summary>"" = pasta padrão (FileTransferService.DefaultDownloadDir).</summary>
+    public string DownloadDir { get; set; } = "";
+
     /// <summary>Carrega de <paramref name="path"/> (padrão AppPaths.SettingsFile). Se não existir/corrompido, cria padrão
     /// (com DeviceId novo e DeviceName = MachineName) e salva. Nunca lança.</summary>
     public static AppSettings Load(string? path = null)

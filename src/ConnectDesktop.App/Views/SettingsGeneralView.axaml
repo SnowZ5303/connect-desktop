@@ -1,0 +1,68 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:s="using:ConnectDesktop.App.Services"
+             x:Class="ConnectDesktop.App.Views.SettingsGeneralView">
+  <UserControl.Styles>
+  </UserControl.Styles>
+
+  <ScrollViewer>
+    <StackPanel Spacing="16" Margin="0,0,8,0">
+
+      <StackPanel Spacing="4">
+        <TextBlock Text="{s:Tr settings.general.title}" FontSize="24" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" />
+        <TextBlock Text="{s:Tr settings.general.subtitle}" Foreground="{DynamicResource TextSecondaryBrush}" />
+      </StackPanel>
+
+      <!-- Nome deste PC -->
+      <Border Classes="card">
+        <StackPanel Spacing="12">
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <Path Classes="icon accent" Data="{StaticResource IconDevices}" VerticalAlignment="Center" />
+            <TextBlock Text="{s:Tr settings.general.deviceName}" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
+          </StackPanel>
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBox x:Name="NameBox" Classes="field" Grid.Column="0" MaxLength="40" Margin="0,0,12,0" />
+            <Button x:Name="SaveNameButton" Grid.Column="1" Classes="primary" Content="{s:Tr settings.general.save}" />
+          </Grid>
+          <TextBlock x:Name="NameStatusText" Foreground="{DynamicResource TextSecondaryBrush}" />
+        </StackPanel>
+      </Border>
+
+      <!-- Opções -->
+      <Border Classes="card">
+        <StackPanel Spacing="14">
+          <CheckBox x:Name="ShareClipboardCheck" Content="{s:Tr settings.general.shareClipboard}" />
+          <CheckBox x:Name="UpdatesOnStartCheck" Content="{s:Tr settings.general.updatesOnStart}" />
+        </StackPanel>
+      </Border>
+
+      <!-- Atualizações -->
+      <Border Classes="card">
+        <StackPanel Spacing="12">
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <Path Classes="icon accent" Data="{StaticResource IconRefresh}" VerticalAlignment="Center" />
+            <TextBlock Text="{s:Tr settings.general.updates}" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
+          </StackPanel>
+          <Button x:Name="CheckUpdatesButton" Classes="primary" Content="{s:Tr settings.general.checkUpdates}" HorizontalAlignment="Left" />
+          <TextBlock x:Name="UpdateResultText" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}" />
+        </StackPanel>
+      </Border>
+
+      <!-- Pasta de recebimento -->
+      <Border Classes="card">
+        <StackPanel Spacing="12">
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <Path Classes="icon accent" Data="{StaticResource IconDownload}" VerticalAlignment="Center" />
+            <TextBlock Text="{s:Tr settings.general.downloadDir}" FontSize="16" FontWeight="SemiBold" Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" />
+          </StackPanel>
+          <TextBlock x:Name="DownloadDirText" TextWrapping="Wrap" Foreground="{DynamicResource TextSecondaryBrush}" />
+          <StackPanel Orientation="Horizontal" Spacing="10">
+            <Button x:Name="ChangeDirButton" Content="{s:Tr settings.general.change}" />
+            <Button x:Name="ResetDirButton" Content="{s:Tr settings.general.resetDir}" />
+          </StackPanel>
+        </StackPanel>
+      </Border>
+
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

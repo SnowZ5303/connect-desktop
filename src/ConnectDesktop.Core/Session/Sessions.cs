@@ -58,6 +58,9 @@ public sealed class PrimarySession : IAsyncDisposable
 
     public ScreenSide SecondarySide { get; set; }
 
+    /// <summary>Serviço de transferência de arquivos (definido pelo app antes do Start).</summary>
+    public Transfer.FileTransferService? Files { get; set; }
+
     public PrimaryState State
     {
         get
@@ -99,6 +102,7 @@ public sealed class PrimarySession : IAsyncDisposable
         _pingTimer = new System.Threading.Timer(_ => _outbox.Writer.TryWrite(new PingMessage(Environment.TickCount64)), null, 5000, 5000);
 
         _clipboard?.Attach(_channel);
+        Files?.Attach(_channel);
     }
 
     public async ValueTask DisposeAsync()
@@ -299,6 +303,13 @@ public sealed class PrimarySession : IAsyncDisposable
             case PingMessage ping:
                 _outbox.Writer.TryWrite(new PongMessage(ping.Timestamp));
                 break;
+            case FileOfferMessage:
+            case FileChunkMessage:
+            case FileDoneMessage:
+            case FileCancelMessage:
+            case FileResultMessage:
+                ForwardFileMessage(message);
+                break;
         }
     }
 
@@ -342,12 +353,33 @@ public sealed class PrimarySession : IAsyncDisposable
         }
     }
 
+    private void ForwardFileMessage(Message message)
+    {
+        try
+        {
+            Files?.OnRemoteMessage(message);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[Session] falha ao processar arquivo: {ex.Message}");
+        }
+    }
+
     private void RaiseEndedOnce()
     {
         lock (_lock)
         {
             if (_endedRaised) return;
             _endedRaised = true;
+        }
+
+        try
+        {
+            Files?.Detach(_channel);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[Session] falha ao desligar transferência: {ex.Message}");
         }
 
         Ended?.Invoke();
@@ -395,6 +427,9 @@ public sealed class SecondarySession : IAsyncDisposable
     /// <summary>Lado em que o principal fica, visto do secundário (vem do último EnterMessage). Padrão Left.</summary>
     public ScreenSide PrimarySide { get; private set; } = ScreenSide.Left;
 
+    /// <summary>Serviço de transferência de arquivos (definido pelo app antes do Start).</summary>
+    public Transfer.FileTransferService? Files { get; set; }
+
     /// <summary>true enquanto o cursor do principal está nesta tela.</summary>
     public bool IsActive
     {
@@ -428,6 +463,7 @@ public sealed class SecondarySession : IAsyncDisposable
         _ = Task.Run(ReadLoopAsync);
 
         _clipboard?.Attach(_channel);
+        Files?.Attach(_channel);
     }
 
     public async ValueTask DisposeAsync()
@@ -482,6 +518,13 @@ public sealed class SecondarySession : IAsyncDisposable
                 break;
             case ClipboardMessage clipboardMessage:
                 _clipboard?.OnRemoteText(clipboardMessage.Text);
+                break;
+            case FileOfferMessage:
+            case FileChunkMessage:
+            case FileDoneMessage:
+            case FileCancelMessage:
+            case FileResultMessage:
+                ForwardFileMessage(message);
                 break;
         }
     }
@@ -668,12 +711,33 @@ public sealed class SecondarySession : IAsyncDisposable
         }
     }
 
+    private void ForwardFileMessage(Message message)
+    {
+        try
+        {
+            Files?.OnRemoteMessage(message);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[Session] falha ao processar arquivo: {ex.Message}");
+        }
+    }
+
     private void RaiseEndedOnce()
     {
         lock (_lock)
         {
             if (_endedRaised) return;
             _endedRaised = true;
+        }
+
+        try
+        {
+            Files?.Detach(_channel);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[Session] falha ao desligar transferência: {ex.Message}");
         }
 
         Ended?.Invoke();

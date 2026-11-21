@@ -73,6 +73,58 @@ public static class MessageCodec
                 payload = new byte[8];
                 BinaryPrimitives.WriteInt64LittleEndian(payload.AsSpan(0), m.Timestamp);
                 break;
+            case FileOfferMessage m:
+                {
+                    var name = Encoding.UTF8.GetBytes(m.FileName);
+                    if (name.Length > FileTransferLimits.MaxFileNameBytes)
+                        throw new ArgumentException("Nome de arquivo grande demais.", nameof(message));
+                    payload = new byte[16 + 4 + name.Length + 8];
+                    m.TransferId.TryWriteBytes(payload.AsSpan(0, 16));
+                    BinaryPrimitives.WriteInt32LittleEndian(payload.AsSpan(16), name.Length);
+                    name.CopyTo(payload, 20);
+                    BinaryPrimitives.WriteInt64LittleEndian(payload.AsSpan(20 + name.Length), m.Size);
+                    break;
+                }
+            case FileChunkMessage m:
+                {
+                    if (m.Data.Length > FileTransferLimits.ChunkSize)
+                        throw new ArgumentException("Bloco de arquivo grande demais.", nameof(message));
+                    payload = new byte[16 + 8 + 4 + m.Data.Length];
+                    m.TransferId.TryWriteBytes(payload.AsSpan(0, 16));
+                    BinaryPrimitives.WriteInt64LittleEndian(payload.AsSpan(16), m.Offset);
+                    BinaryPrimitives.WriteInt32LittleEndian(payload.AsSpan(24), m.Data.Length);
+                    m.Data.CopyTo(payload, 28);
+                    break;
+                }
+            case FileDoneMessage m:
+                {
+                    if (m.Sha256.Length != 32)
+                        throw new ArgumentException("SHA-256 deve ter 32 bytes.", nameof(message));
+                    payload = new byte[16 + 4 + 32];
+                    m.TransferId.TryWriteBytes(payload.AsSpan(0, 16));
+                    BinaryPrimitives.WriteInt32LittleEndian(payload.AsSpan(16), 32);
+                    m.Sha256.CopyTo(payload, 20);
+                    break;
+                }
+            case FileCancelMessage m:
+                {
+                    var reason = Encoding.UTF8.GetBytes(m.Reason);
+                    payload = new byte[16 + 4 + reason.Length];
+                    m.TransferId.TryWriteBytes(payload.AsSpan(0, 16));
+                    BinaryPrimitives.WriteInt32LittleEndian(payload.AsSpan(16), reason.Length);
+                    reason.CopyTo(payload, 20);
+                    break;
+                }
+            case FileResultMessage m:
+                {
+                    var error = Encoding.UTF8.GetBytes(m.Error);
+                    payload = new byte[16 + 1 + 4 + error.Length];
+                    m.TransferId.TryWriteBytes(payload.AsSpan(0, 16));
+                    payload[16] = m.Ok ? (byte)1 : (byte)0;
+                    BinaryPrimitives.WriteInt32LittleEndian(payload.AsSpan(17), error.Length);
+                    error.CopyTo(payload, 21);
+                    break;
+                }
             default:
                 throw new ArgumentException("Tipo de mensagem desconhecido.", nameof(message));
         }
@@ -133,6 +185,16 @@ public static class MessageCodec
             case MessageType.Pong:
                 Expect(p, 8, MessageType.Pong);
                 return new PongMessage(BinaryPrimitives.ReadInt64LittleEndian(p.Slice(0, 8)));
+            case MessageType.FileOffer:
+                return DecodeFileOffer(p);
+            case MessageType.FileChunk:
+                return DecodeFileChunk(p);
+            case MessageType.FileDone:
+                return DecodeFileDone(p);
+            case MessageType.FileCancel:
+                return DecodeFileCancel(p);
+            case MessageType.FileResult:
+                return DecodeFileResult(p);
             default:
                 throw new FormatException($"Tipo de mensagem desconhecido: {type}.");
         }
@@ -163,6 +225,125 @@ public static class MessageCodec
         if (value > MaxScreenSideValue)
             throw new FormatException($"Lado de tela inválido: {value}.");
         return value;
+    }
+
+    private static Message DecodeFileOffer(ReadOnlySpan<byte> p)
+    {
+        var id = ReadGuid(ref p);
+        var name = ReadString(ref p, FileTransferLimits.MaxFileNameBytes);
+        var size = ReadInt64(ref p);
+        ExpectEnd(p, MessageType.FileOffer);
+        return new FileOfferMessage(id, name, size);
+    }
+
+    private static Message DecodeFileChunk(ReadOnlySpan<byte> p)
+    {
+        var id = ReadGuid(ref p);
+        var offset = ReadInt64(ref p);
+        var data = ReadByteArray(ref p);
+        if (data.Length > FileTransferLimits.ChunkSize)
+            throw new FormatException($"Bloco de arquivo grande demais: {data.Length} bytes.");
+        ExpectEnd(p, MessageType.FileChunk);
+        return new FileChunkMessage(id, offset, data);
+    }
+
+    private static Message DecodeFileDone(ReadOnlySpan<byte> p)
+    {
+        var id = ReadGuid(ref p);
+        var sha256 = ReadByteArray(ref p);
+        if (sha256.Length != 32)
+            throw new FormatException($"SHA-256 inválido: esperado 32 bytes, recebido {sha256.Length}.");
+        ExpectEnd(p, MessageType.FileDone);
+        return new FileDoneMessage(id, sha256);
+    }
+
+    private static Message DecodeFileCancel(ReadOnlySpan<byte> p)
+    {
+        var id = ReadGuid(ref p);
+        var reason = ReadString(ref p);
+        ExpectEnd(p, MessageType.FileCancel);
+        return new FileCancelMessage(id, reason);
+    }
+
+    private static Message DecodeFileResult(ReadOnlySpan<byte> p)
+    {
+        var id = ReadGuid(ref p);
+        var ok = ReadBoolField(ref p);
+        var error = ReadString(ref p);
+        ExpectEnd(p, MessageType.FileResult);
+        return new FileResultMessage(id, ok, error);
+    }
+
+    private static void ExpectEnd(ReadOnlySpan<byte> rest, MessageType type)
+    {
+        if (rest.Length != 0)
+            throw new FormatException($"Sobraram {rest.Length} bytes no payload de {type}.");
+    }
+
+    private static void NeedBytes(ReadOnlySpan<byte> p, int count)
+    {
+        if (p.Length < count)
+            throw new FormatException("Mensagem truncada.");
+    }
+
+    private static Guid ReadGuid(ref ReadOnlySpan<byte> p)
+    {
+        NeedBytes(p, 16);
+        var id = new Guid(p.Slice(0, 16));
+        p = p.Slice(16);
+        return id;
+    }
+
+    private static long ReadInt64(ref ReadOnlySpan<byte> p)
+    {
+        NeedBytes(p, 8);
+        var value = BinaryPrimitives.ReadInt64LittleEndian(p.Slice(0, 8));
+        p = p.Slice(8);
+        return value;
+    }
+
+    private static int ReadInt32(ref ReadOnlySpan<byte> p)
+    {
+        NeedBytes(p, 4);
+        var value = BinaryPrimitives.ReadInt32LittleEndian(p.Slice(0, 4));
+        p = p.Slice(4);
+        return value;
+    }
+
+    private static bool ReadBoolField(ref ReadOnlySpan<byte> p)
+    {
+        NeedBytes(p, 1);
+        var value = ReadBool(p[0]);
+        p = p.Slice(1);
+        return value;
+    }
+
+    /// <summary>String = int32 tamanho em bytes + UTF-8. maxBytes limita o tamanho do texto em bytes.</summary>
+    private static string ReadString(ref ReadOnlySpan<byte> p, int maxBytes = int.MaxValue)
+    {
+        var length = ReadInt32(ref p);
+        if (length < 0)
+            throw new FormatException($"Tamanho de texto negativo: {length}.");
+        if (length > p.Length)
+            throw new FormatException($"Texto maior que o restante da mensagem: {length} bytes.");
+        if (length > maxBytes)
+            throw new FormatException($"Texto maior que o limite de {maxBytes} bytes: {length}.");
+        var text = DecodeText(p.Slice(0, length));
+        p = p.Slice(length);
+        return text;
+    }
+
+    /// <summary>byte[] = int32 tamanho + bytes.</summary>
+    private static byte[] ReadByteArray(ref ReadOnlySpan<byte> p)
+    {
+        var length = ReadInt32(ref p);
+        if (length < 0)
+            throw new FormatException($"Tamanho de bloco negativo: {length}.");
+        if (length > p.Length)
+            throw new FormatException($"Bloco maior que o restante da mensagem: {length} bytes.");
+        var data = p.Slice(0, length).ToArray();
+        p = p.Slice(length);
+        return data;
     }
 
     private static string DecodeText(ReadOnlySpan<byte> payload)

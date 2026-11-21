@@ -1,0 +1,83 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:s="using:ConnectDesktop.App.Services"
+             x:Class="ConnectDesktop.App.Views.TransfersView">
+  <UserControl.Styles>
+    <Style Selector="Border.row">
+      <Setter Property="Background" Value="{DynamicResource CardBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="12" />
+      <Setter Property="Padding" Value="16,14" />
+    </Style>
+    <Style Selector="TextBlock.rowTitle">
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}" />
+    </Style>
+    <Style Selector="ProgressBar">
+      <Setter Property="Foreground" Value="{DynamicResource AccentBrush}" />
+    </Style>
+    <!-- Estado desabilitado: sem o fundo cinza padrão do tema, só esmaecido -->
+    <Style Selector="Button.link:disabled">
+      <Setter Property="Opacity" Value="0.45" />
+    </Style>
+    <Style Selector="Button.link:disabled /template/ Border#PART_Border">
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="Button.primary:disabled">
+      <Setter Property="Opacity" Value="0.45" />
+    </Style>
+    <Style Selector="Button.primary:disabled /template/ Border#PART_Border">
+      <Setter Property="Background" Value="{DynamicResource AccentBrush}" />
+    </Style>
+  </UserControl.Styles>
+
+  <ScrollViewer>
+    <StackPanel Spacing="16" Margin="0,0,8,0">
+
+      <StackPanel Spacing="4">
+        <TextBlock Text="{s:Tr transfers.title}" Classes="heading" />
+        <TextBlock Text="{s:Tr transfers.subtitle}" Classes="muted" />
+      </StackPanel>
+
+      <!-- Área de arrastar e soltar -->
+      <Border x:Name="DropZone" Classes="card" DragDrop.AllowDrop="True" MinHeight="180"
+              BorderBrush="{DynamicResource AccentBrush}" BorderThickness="2" Background="{DynamicResource AccentSoftBrush}">
+        <StackPanel Spacing="10" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,12">
+          <Path Classes="icon accent" Data="{StaticResource IconDownload}" Width="40" Height="40" Stretch="Uniform"
+                HorizontalAlignment="Center" />
+          <TextBlock Text="{s:Tr transfers.dropHint}" FontSize="16" FontWeight="SemiBold" HorizontalAlignment="Center" />
+          <TextBlock Text="{s:Tr transfers.dropSub}" HorizontalAlignment="Center" TextAlignment="Center" Classes="muted" />
+          <Button x:Name="PickButton" Classes="primary" Content="{s:Tr transfers.pick}" HorizontalAlignment="Center" Margin="0,6,0,0" />
+          <TextBlock x:Name="NotConnectedText" Text="{s:Tr transfers.notConnected}" HorizontalAlignment="Center"
+                     Classes="muted" IsVisible="False" />
+          <TextBlock x:Name="StatusText" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap"
+                     Classes="muted" IsVisible="False" />
+        </StackPanel>
+      </Border>
+
+      <!-- Pasta de destino -->
+      <Border Classes="card">
+        <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto">
+          <TextBlock Grid.Row="0" Grid.Column="0" Text="{s:Tr transfers.destinationTitle}" Classes="title" Margin="0,0,12,4" />
+          <TextBlock x:Name="DestText" Grid.Row="1" Grid.Column="0" TextWrapping="Wrap" Margin="0,0,12,0" Classes="muted" />
+          <Button x:Name="OpenDownloadsButton" Grid.Row="0" Grid.RowSpan="2" Grid.Column="1"
+                  Classes="link" Content="{s:Tr transfers.openDownloads}" VerticalAlignment="Center" />
+        </Grid>
+      </Border>
+
+      <!-- Lista de transferências -->
+      <Border Classes="card">
+        <StackPanel Spacing="12">
+          <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Grid.Column="0" Text="{s:Tr transfers.listTitle}" Classes="title" VerticalAlignment="Center" />
+            <Button x:Name="ClearButton" Grid.Column="1" Classes="link" Content="{s:Tr transfers.clearFinished}" />
+          </Grid>
+          <TextBlock x:Name="EmptyText" Text="{s:Tr transfers.empty}" Classes="muted" />
+          <StackPanel x:Name="TransfersList" Spacing="10" />
+        </StackPanel>
+      </Border>
+
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>
